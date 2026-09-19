@@ -1,0 +1,359 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f5fa;
+  --panel: #fff;
+  --line: #e5e9f0;
+  --text: #111827;
+  --muted: #687385;
+  --accent: #2457ff;
+}
+body {
+  font-family: Arial, 'Malgun Gothic', sans-serif;
+  background: #fff;
+  color: #111827;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+input,
+select,
+textarea {
+  color: #111827;
+  background: #f8fafc;
+  border-color: #dce2eb;
+}
+input[type='range'] {
+  accent-color: #2457ff;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #9bb3ff;
+  outline-offset: 2px;
+}
+.topbar,
+.optionsbar,
+.toolrail,
+.properties,
+.statusbar {
+  background: #fff;
+}
+.topbar {
+  height: 72px;
+  padding: 0 24px;
+}
+.brand {
+  gap: 10px;
+}
+.brandmark {
+  background: #edf2ff;
+  color: #2457ff;
+}
+.brand strong {
+  font-size: 18px;
+  color: #111827;
+}
+.brand strong > span {
+  color: #2457ff;
+  font-weight: 600;
+}
+.brand small {
+  color: #687385;
+  border-color: #e5e9f0;
+}
+.file-actions button,
+.save-button,
+.tool-title {
+  color: #536074;
+}
+.local-badge {
+  color: #687385;
+}
+.primary {
+  background: #2457ff;
+  color: #fff;
+  border-radius: 9px;
+}
+.icon-button {
+  color: #687385;
+}
+.icon-button:not(:disabled):hover {
+  background: #edf2ff;
+  color: #2457ff;
+}
+.icon-button.active {
+  background: #edf2ff;
+  color: #2457ff;
+}
+.subtle {
+  background: #edf2ff;
+  border-color: #ccd9ff;
+  color: #2457ff;
+}
+.divider {
+  background: #e5e9f0;
+}
+.color-well {
+  border-color: #c7d0df;
+  box-shadow:
+    5px 5px 0 -1px #fff,
+    5px 5px #c7d0df;
+}
+.document-tab {
+  background: #f3f5fa;
+  border-color: #e5e9f0;
+}
+.tab-active {
+  background: #fff;
+  border-top-color: #2457ff;
+}
+.tab-active input {
+  color: #111827;
+}
+.tab-size,
+.document-mode {
+  color: #687385;
+}
+.workspace {
+  background-color: #f3f5fa;
+  background-image: radial-gradient(#dce2eb 0.75px, transparent 0.75px);
+}
+.ruler-top,
+.ruler-left {
+  background: #edf0f6;
+  border-color: #dce2eb;
+}
+.ruler-top span,
+.ruler-left span {
+  color: #788498;
+  border-color: #c7d0df;
+}
+.ruler-top span {
+  background: repeating-linear-gradient(90deg, transparent 0 19px, #c7d0df 19px 20px) bottom/100%
+    4px no-repeat;
+}
+.canvas-label,
+.canvas-label span {
+  color: #687385;
+}
+.canvas-frame {
+  box-shadow:
+    0 10px 40px #263d591a,
+    0 0 0 1px #cdd5e0;
+}
+.checker {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #e5e9f0 25%, transparent 25%),
+    linear-gradient(-45deg, #e5e9f0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e5e9f0 75%),
+    linear-gradient(-45deg, transparent 75%, #e5e9f0 75%);
+}
+.empty-icon {
+  background: #edf2ff;
+  border-color: #d8e2ff;
+  box-shadow: none;
+}
+.eyebrow {
+  color: #2457ff;
+}
+.empty-workspace h1 {
+  color: #111827;
+  font-weight: 650;
+}
+.empty-workspace p,
+.empty-new,
+.file-types,
+.privacy-note {
+  color: #687385;
+}
+.status-dim,
+.save-state svg,
+.property-header > span,
+.property-header > svg {
+  color: #687385;
+}
+.section-label {
+  color: #111827;
+}
+.number-grid label {
+  background: #f8fafc;
+  border-color: #dce2eb;
+  border-radius: 7px;
+}
+.number-grid label > span,
+.number-grid small,
+.slider-row > span,
+.slider-row output,
+.document-props p {
+  color: #687385;
+}
+.ai-card {
+  background: #edf2ff;
+  border-color: #d8e2ff;
+}
+.ai-card strong,
+.ai-card > svg {
+  color: #2457ff;
+}
+.ai-card small {
+  color: #536074;
+}
+.layers-tabs button {
+  color: #687385;
+}
+.layers-tabs .selected {
+  color: #2457ff;
+}
+.layers-tabs button > span {
+  background: #edf2ff;
+  color: #2457ff;
+}
+.blend-controls {
+  border-color: #e5e9f0;
+}
+.blend-controls label {
+  color: #687385;
+}
+.layer-row {
+  border-bottom-color: #e5e9f0;
+}
+.layer-row.selected {
+  background: #edf2ff;
+}
+.layer-row .icon-button {
+  color: #536074;
+}
+.layer-row input {
+  color: #111827;
+}
+.layer-row input:focus {
+  border-color: #2457ff;
+}
+.layer-thumb {
+  border-color: #dce2eb;
+}
+.empty-layers,
+.empty-layers p,
+.history-list p {
+  color: #687385;
+}
+.toast {
+  background: #fff;
+  color: #111827;
+  border-color: #d8e2ff;
+  box-shadow: 0 5px 30px #263d591a;
+}
+.toast button {
+  color: #2457ff;
+}
+.modal-backdrop {
+  background: #172b4d70;
+}
+.modal {
+  background: #fff;
+  color: #111827;
+  border-color: #e5e9f0;
+  box-shadow: 0 24px 100px #172b4d30;
+}
+.modal > p,
+.modal-fields label,
+.field-label,
+.connection-explanation,
+.ai-source,
+.modal-footnote,
+.shortcut-list > div,
+.help-note {
+  color: #687385 !important;
+}
+.presets > button {
+  border-color: #dce2eb;
+}
+.presets small {
+  color: #687385;
+}
+.preset-shape {
+  background: #edf2ff;
+  border-color: #2457ff;
+}
+.export-info,
+.export-info strong {
+  color: #111827;
+}
+.export-info span {
+  color: #687385;
+}
+.connection-state {
+  background: #f3f5fa;
+  color: #536074;
+}
+.shortcut-list kbd {
+  color: #2457ff;
+}
+.mask-brush-modes .chosen {
+  background: #edf2ff;
+}
+.ai-message {
+  color: #946000 !important;
+}
+::-webkit-scrollbar-thumb {
+  background: #c7d0df;
+  border: 2px solid #f3f5fa;
+}
+::-webkit-scrollbar-corner {
+  background: #f3f5fa;
+}
+.handoff-banner {
+  background: #2457ff;
+  color: #fff;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.handoff-banner button {
+  border: 1px solid #ffffff80;
+  border-radius: 6px;
+  padding: 7px 12px;
+  color: #fff;
+  background: transparent;
+}
+.handoff-banner button:last-child {
+  margin-left: auto;
+}
+@media (max-width: 760px) {
+  .topbar {
+    height: 55px;
+    padding: 0 10px;
+  }
+  .brand strong {
+    font-size: 15px;
+  }
+  .brand {
+    margin-right: 0;
+  }
+  .brandmark {
+    width: 27px;
+    height: 27px;
+  }
+  .properties {
+    top: 101px;
+    box-shadow: -10px 0 30px #172b4d20;
+  }
+  .handoff-banner {
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    padding: 10px;
+  }
+  .empty-workspace h1 {
+    font-size: 29px;
+  }
+  .optionsbar {
+    min-height: 46px;
+  }
+}

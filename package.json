@@ -1,0 +1,41 @@
+{
+  "name": "photoshot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Photoshot 01: browser image editor with basic tools, layers and masks.",
+  "homepage": "https://slohero.com/photoshot/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dodohan0721/photoshot.git"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node tests/mask-render.mjs",
+    "format": "prettier --write src tests index.html vite.config.ts postcss.config.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "1.31.0",
+    "pixi.js": "8.20.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "1.0.9",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "prettier": "3.6.2",
+    "tailwindcss": "4.2.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.0"
+  }
+}
