@@ -42,6 +42,7 @@ import {
   composite,
   dataUrl,
   download,
+  layerSurface,
   loadImage,
   localLoad,
   localPoint,
@@ -55,7 +56,15 @@ import {
   type Point,
   type StudioDoc,
 } from './document';
-
+import AdjustmentPanel from './adjustment-panel';
+import { analyzeTones, type ToneAnalysis } from './tone-analysis';
+import {
+  adjustmentTypes,
+  definitions,
+  makeAdjustment,
+  type Adjustment,
+  type AdjustmentType,
+} from './adjustments';
 type Tool = 'move' | 'select' | 'crop' | 'brush' | 'erase' | 'text' | 'hand';
 type Rect = { x: number; y: number; width: number; height: number };
 const tools = [
@@ -94,14 +103,19 @@ function IconButton({
     </button>
   );
 }
-export default function Editor({
-  homeHref = 'https://slohero.com/photoshot/',
-}: { homeHref?: string } = {}) {
+export default function Editor() {
+  const homeHref = 'https://slohero.com/photoshot/';
   const [doc, setDoc] = useState<StudioDoc>(blankDoc),
     docRef = useRef(doc);
   docRef.current = doc;
   const [maskTarget, setMaskTarget] = useState<string | null>(null),
     [maskRestore, setMaskRestore] = useState(false);
+  const [compareId, setCompareId] = useState<string | null>(null),
+    [toneAnalysis, setToneAnalysis] = useState<ToneAnalysis | null>(null),
+    [analysisBusy, setAnalysisBusy] = useState(false);
+  const [toneClipping, setToneClipping] = useState(false);
+  const propertyScroll = useRef<HTMLDivElement>(null),
+    analysisInput = useRef<StudioDoc | null>(null);
   const [selected, setSelected] = useState<string | null>(null),
     [tool, setTool] = useState<Tool>('move'),
     [zoom, setZoom] = useState(0.65);
@@ -111,7 +125,7 @@ export default function Editor({
   const [toast, setToast] = useState(''),
     [saveStatus, setSaveStatus] = useState('이 기기에 자동 저장'),
     [ready, setReady] = useState(false);
-  const [modal, setModal] = useState<'new' | 'export' | 'help' | null>(null),
+  const [modal, setModal] = useState<'new' | 'export' | 'help' | 'adjustment' | null>(null),
     [newWidth, setNewWidth] = useState(1200),
     [newHeight, setNewHeight] = useState(800);
   const [exportFormat, setExportFormat] = useState('png'),
@@ -137,6 +151,7 @@ export default function Editor({
   const active = doc.layers.find((l) => l.id === selected),
     canEdit = !!active && !active.locked,
     currentTool = tools.find((t) => t.id === tool)!;
+  const adjustmentEdit = useRef<{ doc: StudioDoc; id: string } | null>(null);
   const maskEditing = !!active?.mask && active.id === maskTarget;
   function addMask() {
     if (!active || !canEdit) return;
@@ -158,6 +173,123 @@ export default function Editor({
     setTool('brush');
   }
   const notify = useCallback((message: string) => setToast(message), []);
+  const renderedDoc = compareId
+    ? { ...doc, layers: doc.layers.map((l) => (l.id === compareId ? { ...l, visible: false } : l)) }
+    : doc;
+  let analysisSource: StudioDoc | null = null;
+  if (
+    active?.adjustment &&
+    ['brightness', 'levels', 'curves', 'exposure'].includes(active.adjustment.type)
+  ) {
+    const index = doc.layers.findIndex((l) => l.id === active.id);
+    let below = doc.layers.slice(0, index);
+    if (active.adjustment.scope === 'clipped' && below.length) {
+      let base = below.length - 1;
+      while (base > 0 && below[base].adjustment?.scope === 'clipped') base--;
+      if (below[base].kind !== 'adjustment') below = below.slice(base);
+    }
+    const previous = analysisInput.current;
+    if (
+      !previous ||
+      previous.width !== doc.width ||
+      previous.height !== doc.height ||
+      previous.layers.length !== below.length ||
+      below.some((l, i) => l !== previous.layers[i])
+    )
+      analysisInput.current = { ...doc, layers: below };
+    analysisSource = analysisInput.current;
+  }
+  useEffect(() => {
+    let live = true;
+    setToneAnalysis(null);
+    setAnalysisBusy(!!analysisSource);
+    if (analysisSource)
+      void composite(analysisSource, false, { maxEdge: 384, cancelled: () => !live })
+        .then((c) => {
+          if (live)
+            setToneAnalysis(
+              analyzeTones(c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data),
+            );
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (live) setAnalysisBusy(false);
+        });
+    return () => {
+      live = false;
+    };
+  }, [analysisSource]);
+  useEffect(() => {
+    setToneClipping(false);
+    setCompareId(null);
+    propertyScroll.current?.scrollTo({ top: 0 });
+    if (active?.kind === 'adjustment') setPanelOpen(true);
+  }, [selected]);
+  function showProperties(id: string, mask = false) {
+    endAdjustment();
+    setSelected(id);
+    setMaskTarget(mask ? id : null);
+    setCompareId(null);
+    setPanelOpen(true);
+    setPanel('layers');
+    if (mask) setTool('brush');
+    requestAnimationFrame(() => propertyScroll.current?.scrollTo({ top: 0 }));
+  }
+
+  useEffect(() => {
+    type ToolRegistry = {
+      registerTool: (
+        t: {
+          name: string;
+          description: string;
+          inputSchema: object;
+          annotations: object;
+          execute: (input: unknown) => unknown;
+        },
+        options: { signal: AbortSignal },
+      ) => void | Promise<void>;
+    };
+    const context = (document as Document & { modelContext?: ToolRegistry }).modelContext;
+    if (!context?.registerTool) return;
+    const lifecycle = new AbortController();
+    try {
+      Promise.resolve(
+        context.registerTool(
+          {
+            name: 'inspect_layer_document',
+            description:
+              'Read the current canvas and layer properties without image bytes or making changes.',
+            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+            annotations: { readOnlyHint: true, untrustedContentHint: true },
+            execute(input) {
+              if (
+                !input ||
+                typeof input !== 'object' ||
+                Array.isArray(input) ||
+                Object.keys(input).length
+              )
+                throw Error('Expected an empty object');
+              const d = docRef.current;
+              return {
+                name: d.name,
+                width: d.width,
+                height: d.height,
+                layers: d.layers.map(({ src, strokes, mask, ...l }) => ({
+                  ...l,
+                  strokeCount: strokes.length,
+                  hasMask: !!mask,
+                })),
+              };
+            },
+          },
+          { signal: lifecycle.signal },
+        ),
+      ).catch(() => {});
+    } catch {
+      /* unsupported experimental browser API */
+    }
+    return () => lifecycle.abort();
+  }, []);
   useEffect(() => {
     if (!modal) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -206,6 +338,68 @@ export default function Editor({
     },
     [commit],
   );
+  function beginAdjustment() {
+    if (active?.kind === 'adjustment' && !active.locked && !adjustmentEdit.current)
+      adjustmentEdit.current = { doc: docRef.current, id: active.id };
+  }
+  function endAdjustment() {
+    const edit = adjustmentEdit.current;
+    if (!edit) return;
+    adjustmentEdit.current = null;
+    if (docRef.current !== edit.doc) commit(docRef.current, '조정 수치 변경', edit.doc);
+  }
+  function changeAdjustment(id: string, adjustment: Adjustment) {
+    const d = docRef.current,
+      l = d.layers.find((l) => l.id === id);
+    if (!l || l.locked) return;
+    const next = { ...d, layers: d.layers.map((l) => (l.id === id ? { ...l, adjustment } : l)) };
+    if (adjustmentEdit.current?.id === id) {
+      docRef.current = next;
+      setDoc(next);
+    } else commit(next, `${definitions[adjustment.type].name} 변경`);
+  }
+  function addAdjustment(type: AdjustmentType) {
+    const d = docRef.current;
+    if (d.layers.length >= 50) {
+      notify('최대 50개 레이어를 사용할 수 있습니다.');
+      return;
+    }
+    const polygon =
+      selection && selection.width > 0 && selection.height > 0
+        ? [
+            { x: selection.x, y: selection.y },
+            { x: selection.x + selection.width, y: selection.y },
+            { x: selection.x + selection.width, y: selection.y + selection.height },
+            { x: selection.x, y: selection.y + selection.height },
+          ]
+        : undefined;
+    const layer = makeLayer({
+      kind: 'adjustment',
+      name: definitions[type].name,
+      width: d.width,
+      height: d.height,
+      adjustment: makeAdjustment(type),
+      mask: {
+        width: d.width,
+        height: d.height,
+        enabled: true,
+        inverted: false,
+        strokes: [],
+        ...(polygon ? { polygon } : {}),
+      },
+    });
+    const index = d.layers.findIndex((l) => l.id === selected),
+      layers = [...d.layers];
+    layers.splice(index < 0 ? layers.length : index + 1, 0, layer);
+    commit({ ...d, version: 2, layers }, `${definitions[type].name} 조정 레이어 추가`);
+    setSelected(layer.id);
+    setMaskTarget(null);
+    setSelection(null);
+    setTool('move');
+    setPanel('layers');
+    setPanelOpen(true);
+    setModal(null);
+  }
   function undo() {
     const item = undoStack.current.pop();
     if (!item) return;
@@ -273,6 +467,7 @@ export default function Editor({
   }, [toast]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (document.querySelector('[data-tutorial-dialog]')) return;
       if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable]')) return;
       if (modal) {
         if (e.key === 'Escape') setModal(null);
@@ -306,7 +501,9 @@ export default function Editor({
         setTool(found.id);
         setSelection(null);
       }
-      if (e.key === 'Escape') setSelection(null);
+      if (e.key === 'Escape') {
+        setSelection(null);
+      }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         remove();
@@ -316,6 +513,7 @@ export default function Editor({
       if (e.key === '-') setZoom((z) => clamp(z / 1.2, 0.08, 3));
       if (
         active &&
+        active.kind !== 'adjustment' &&
         !active.locked &&
         ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)
       ) {
@@ -407,17 +605,23 @@ export default function Editor({
   }
   function duplicate() {
     if (!active) return;
-    addLayer(
-      {
-        ...structuredClone(active),
-        id: uid(),
-        name: `${active.name} 복사`,
-        x: active.x + 20,
-        y: active.y + 20,
-        locked: false,
-      },
-      '레이어 복제',
-    );
+    if (doc.layers.length >= 50) {
+      notify('최대 50개 레이어를 사용할 수 있습니다.');
+      return;
+    }
+    const layer = {
+      ...structuredClone(active),
+      id: uid(),
+      name: `${active.name} 복사`,
+      x: active.x + (active.kind === 'adjustment' ? 0 : 20),
+      y: active.y + (active.kind === 'adjustment' ? 0 : 20),
+      locked: false,
+    };
+    const layers = [...doc.layers];
+    layers.splice(layers.findIndex((l) => l.id === active.id) + 1, 0, layer);
+    commit({ ...doc, layers }, '레이어 복제');
+    setSelected(layer.id);
+    setMaskTarget(null);
   }
   function remove() {
     if (!canEdit) return;
@@ -516,7 +720,7 @@ export default function Editor({
     if (tool === 'hand') return;
     if (tool === 'move') {
       const hit = [...base.layers].reverse().find((l) => {
-        if (!l.visible) return false;
+        if (!l.visible || l.kind === 'adjustment') return false;
         const q = localPoint(p, l);
         return q.x >= 0 && q.y >= 0 && q.x <= l.width && q.y <= l.height;
       });
@@ -537,6 +741,11 @@ export default function Editor({
       if (!active || active.locked) {
         gesture.current = null;
         notify('그릴 레이어를 선택하거나 새 레이어를 추가해 주세요.');
+        return;
+      }
+      if (active.kind === 'adjustment' && !maskEditing) {
+        gesture.current = null;
+        notify('조정 레이어의 마스크 썸네일을 선택해 그려 주세요.');
         return;
       }
       gesture.current.layerId = active.id;
@@ -855,9 +1064,23 @@ export default function Editor({
           <Redo2 size={17} />
         </IconButton>
         <span className="divider" />
-        <IconButton label="레이어 패널 표시" onClick={() => setPanelOpen(!panelOpen)}>
+        <button
+          className="adjustment-toolbar-add"
+          onClick={() => setModal('adjustment')}
+          disabled={doc.layers.length >= 50}
+        >
+          <SlidersHorizontal size={16} />
+          조정 추가
+        </button>
+        <button
+          className={`panel-toggle ${panelOpen ? 'active' : ''}`}
+          aria-label="레이어 패널 표시"
+          aria-expanded={panelOpen}
+          onClick={() => setPanelOpen(!panelOpen)}
+        >
           <Layers3 size={17} />
-        </IconButton>
+          <span>레이어</span>
+        </button>
       </div>
       <div className="editor-body">
         <aside className="toolrail" aria-label="편집 도구">
@@ -932,6 +1155,7 @@ export default function Editor({
               >
                 <div className="canvas-label">
                   {doc.name}
+                  {compareId && <b className="compare-badge">선택한 조정 적용 전</b>}
                   <span>
                     {doc.width} × {doc.height}
                   </span>
@@ -940,7 +1164,7 @@ export default function Editor({
                   className="canvas-frame checker"
                   style={{ width: doc.width * zoom, height: doc.height * zoom }}
                 >
-                  <Stage doc={doc} onError={notify} />
+                  <Stage doc={renderedDoc} onError={notify} clipping={toneClipping} />
                   <svg
                     ref={overlay}
                     viewBox={`0 0 ${doc.width} ${doc.height}`}
@@ -956,39 +1180,42 @@ export default function Editor({
                       }
                     }}
                   >
-                    {active && active.visible && tool === 'move' && (
-                      <g
-                        transform={`rotate(${active.rotation} ${active.x + active.width / 2} ${active.y + active.height / 2})`}
-                        pointerEvents="none"
-                      >
-                        <rect
-                          x={active.x}
-                          y={active.y}
-                          width={active.width}
-                          height={active.height}
-                          fill="none"
-                          stroke={active.locked ? '#aaa' : '#bdff56'}
-                          strokeWidth={1 / zoom}
-                        />
-                        {[
-                          [0, 0],
-                          [1, 0],
-                          [0, 1],
-                          [1, 1],
-                        ].map(([x, y], i) => (
+                    {active &&
+                      active.kind !== 'adjustment' &&
+                      active.visible &&
+                      tool === 'move' && (
+                        <g
+                          transform={`rotate(${active.rotation} ${active.x + active.width / 2} ${active.y + active.height / 2})`}
+                          pointerEvents="none"
+                        >
                           <rect
-                            key={i}
-                            x={active.x + x * active.width - 3 / zoom}
-                            y={active.y + y * active.height - 3 / zoom}
-                            width={6 / zoom}
-                            height={6 / zoom}
-                            fill="#20241b"
-                            stroke="#bdff56"
+                            x={active.x}
+                            y={active.y}
+                            width={active.width}
+                            height={active.height}
+                            fill="none"
+                            stroke={active.locked ? '#aaa' : '#bdff56'}
                             strokeWidth={1 / zoom}
                           />
-                        ))}
-                      </g>
-                    )}
+                          {[
+                            [0, 0],
+                            [1, 0],
+                            [0, 1],
+                            [1, 1],
+                          ].map(([x, y], i) => (
+                            <rect
+                              key={i}
+                              x={active.x + x * active.width - 3 / zoom}
+                              y={active.y + y * active.height - 3 / zoom}
+                              width={6 / zoom}
+                              height={6 / zoom}
+                              fill="#20241b"
+                              stroke="#bdff56"
+                              strokeWidth={1 / zoom}
+                            />
+                          ))}
+                        </g>
+                      )}
                     {selection && (
                       <rect
                         {...selection}
@@ -1062,16 +1289,74 @@ export default function Editor({
             <strong>속성</strong>
             <span>
               {active
-                ? active.kind === 'image'
-                  ? '이미지'
-                  : active.kind === 'text'
-                    ? '문자'
-                    : '픽셀'
+                ? active.kind === 'adjustment'
+                  ? '조정'
+                  : active.kind === 'image'
+                    ? '이미지'
+                    : active.kind === 'text'
+                      ? '문자'
+                      : '픽셀'
                 : '문서'}
             </span>
+            <button
+              className="property-close"
+              aria-label="속성 패널 닫기"
+              onClick={() => setPanelOpen(false)}
+            >
+              <X size={16} />
+            </button>
           </div>
-          <div className="property-scroll">
-            {active ? (
+          {active?.kind === 'adjustment' && (
+            <div className="property-mode-tabs" role="tablist" aria-label="속성 편집 대상">
+              <button
+                role="tab"
+                aria-selected={!maskEditing}
+                onClick={() => showProperties(active.id)}
+              >
+                <SlidersHorizontal size={14} />
+                조정
+              </button>
+              <button
+                role="tab"
+                aria-selected={maskEditing}
+                disabled={!active.mask && !canEdit}
+                onClick={() => {
+                  if (!active.mask) addMask();
+                  else showProperties(active.id, true);
+                }}
+              >
+                <SquareDashed size={14} />
+                마스크
+              </button>
+            </div>
+          )}
+          <div className="property-scroll" ref={propertyScroll}>
+            {active?.kind === 'adjustment' && maskEditing ? null : active?.kind === 'adjustment' &&
+              active.adjustment ? (
+              <>
+                <label className="curve-options">
+                  <input
+                    type="checkbox"
+                    checked={toneClipping}
+                    onChange={(e) => setToneClipping(e.target.checked)}
+                  />
+                  클리핑 보기 · 파랑: 검정 / 빨강: 흰색
+                </label>
+                <AdjustmentPanel
+                  key={active.id}
+                  value={active.adjustment}
+                  disabled={!canEdit}
+                  onChange={(a) => changeAdjustment(active.id, a)}
+                  onBegin={beginAdjustment}
+                  onEnd={endAdjustment}
+                  onError={notify}
+                  analysis={toneAnalysis}
+                  analysisBusy={analysisBusy}
+                  comparing={compareId === active.id}
+                  onCompare={(pressed) => setCompareId(pressed ? active.id : null)}
+                />
+              </>
+            ) : active ? (
               <>
                 <div className="section-label">
                   변형 {active.locked && <LockKeyhole size={13} />}
@@ -1200,7 +1485,7 @@ export default function Editor({
                 </p>
               </div>
             )}
-            {active && (
+            {active && (active.kind !== 'adjustment' || maskEditing) && (
               <section className="mask-controls">
                 <div className="section-label">레이어 마스크</div>
                 {active.mask ? (
@@ -1215,7 +1500,7 @@ export default function Editor({
                       >
                         마스크 편집
                       </button>
-                      <button onClick={() => setMaskTarget(null)}>원본 편집</button>
+                      <button onClick={() => showProperties(active.id)}>원본 편집</button>
                       <button
                         disabled={!canEdit}
                         onClick={() =>
@@ -1260,6 +1545,14 @@ export default function Editor({
               </section>
             )}
           </div>
+          <button
+            className="adjustment-add"
+            onClick={() => setModal('adjustment')}
+            disabled={doc.layers.length >= 50}
+          >
+            <SlidersHorizontal size={15} />
+            조정 레이어 추가
+          </button>
           <div className="layers-tabs">
             <button
               className={panel === 'layers' ? 'selected' : ''}
@@ -1309,12 +1602,9 @@ export default function Editor({
               <div className="layer-list">
                 {[...doc.layers].reverse().map((l) => (
                   <div
-                    className={`layer-row ${l.id === selected ? 'selected' : ''} ${!l.visible ? 'hidden-layer' : ''}`}
+                    className={`layer-row ${l.id === selected ? 'selected' : ''} ${!l.visible ? 'hidden-layer' : ''} ${l.adjustment?.scope === 'clipped' ? 'clipped-adjustment' : ''}`}
                     key={l.id}
-                    onClick={() => {
-                      setSelected(l.id);
-                      setMaskTarget(null);
-                    }}
+                    onClick={() => showProperties(l.id)}
                   >
                     <IconButton
                       label={`${l.name} ${l.visible ? '숨기기' : '표시'}`}
@@ -1322,24 +1612,41 @@ export default function Editor({
                     >
                       {l.visible ? <Eye size={14} /> : <EyeOff size={14} />}
                     </IconButton>
-                    <span className="layer-thumb checker">
-                      {l.src ? (
+                    <button
+                      type="button"
+                      className={`layer-thumb checker ${l.kind === 'adjustment' ? 'adjustment-thumb' : ''}`}
+                      aria-label={`${l.name} ${l.kind === 'adjustment' ? '조정 속성 열기' : '속성 열기'}`}
+                      title={
+                        l.adjustment
+                          ? `${definitions[l.adjustment.type].name} · 클릭하여 조정`
+                          : l.name
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        showProperties(l.id);
+                      }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        showProperties(l.id);
+                      }}
+                    >
+                      {l.kind === 'adjustment' ? (
+                        <SlidersHorizontal size={17} />
+                      ) : l.src ? (
                         <img src={l.src} alt="" />
                       ) : l.kind === 'text' ? (
                         <Type size={17} />
                       ) : (
                         <Brush size={16} />
                       )}
-                    </span>
+                    </button>
                     {l.mask && (
                       <button
                         aria-label={`${l.name} 마스크 편집`}
                         className={`mask-thumb ${maskTarget === l.id ? 'editing' : ''} ${!l.mask.enabled ? 'disabled-mask' : ''}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelected(l.id);
-                          setMaskTarget(l.id);
-                          setTool('brush');
+                          showProperties(l.id, true);
                         }}
                       >
                         <MaskThumb mask={l.mask} />
@@ -1430,7 +1737,9 @@ export default function Editor({
                   ? '새 캔버스'
                   : modal === 'export'
                     ? '이미지 내보내기'
-                    : 'Photoshot 사용법'}
+                    : modal === 'adjustment'
+                      ? '조정 레이어 추가'
+                      : 'Photoshot 사용법'}
               </h2>
               <IconButton label="창 닫기" onClick={() => setModal(null)}>
                 <X size={20} />
@@ -1540,7 +1849,22 @@ export default function Editor({
                 </button>
               </>
             )}
-
+            {modal === 'adjustment' && (
+              <>
+                <p>
+                  선택한 레이어 바로 위에 추가합니다. 수치를 언제든 바꾸고 마스크로 적용 범위를
+                  조절하세요.
+                </p>
+                <div className="adjustment-menu">
+                  {adjustmentTypes.map((type) => (
+                    <button key={type} onClick={() => addAdjustment(type)}>
+                      <strong>{definitions[type].name}</strong>
+                      <small>{definitions[type].description}</small>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             {modal === 'help' && (
               <>
                 <p>
@@ -1549,6 +1873,8 @@ export default function Editor({
                 </p>
                 <div className="shortcut-list">
                   {[
+                    ['Ctrl + T', '이미지 자유 변형'],
+                    ['Enter / Esc', '변형·필터 적용 / 취소'],
                     ['V / M / C', '이동 / 선택 / 자르기'],
                     ['B / E / T', '브러시 / 지우개 / 문자'],
                     ['H / 0', '손 도구 / 화면에 맞춤'],
@@ -1566,6 +1892,11 @@ export default function Editor({
                 <p>
                   마스크 추가 후 브러시의 숨기기·복원으로 편집하세요. 선택 도구(M)로 영역을 지정해
                   마스크를 만들 수도 있습니다. 원본 썸네일을 누르면 원본 편집으로 돌아갑니다.
+                </p>
+                <p>
+                  조정 레이어 추가에서 색상·명암 보정을 선택하세요. 기본으로 아래 레이어 전체에
+                  적용되며, 적용 대상을 클리핑으로 바꾸면 바로 아래 레이어만 조절합니다. 조정
+                  썸네일은 수치 편집, 마스크 썸네일은 영역 편집입니다.
                 </p>
                 <p className="help-note">
                   작업은 이 브라우저에 자동 저장됩니다. 다른 기기에서 이어서 작업하려면 .layerstudio

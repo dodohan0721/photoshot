@@ -1,4 +1,4 @@
-name: Verify Photoshot 01
+name: Verify Photoshot
 on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read

@@ -1,0 +1,99 @@
+.tone-toolbar {
+  margin: 8px 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.tone-buttons {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin: 7px 0;
+}
+.tone-buttons button,
+.tone-auto button {
+  font-size: 11px;
+  padding: 6px 7px;
+  border: 1px solid var(--line, #424750);
+  border-radius: 5px;
+  background: var(--panel, #202329);
+  color: inherit;
+}
+.tone-buttons button[aria-pressed='true'] {
+  border-color: #beef72;
+  color: #beef72;
+}
+.tone-auto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: end;
+}
+.tone-auto label {
+  display: grid;
+  font-size: 10px;
+  gap: 4px;
+  flex: 1;
+  min-width: 85px;
+}
+.tone-auto input,
+.tone-auto select {
+  width: 100%;
+  min-width: 0;
+  background: #17191d;
+  color: #eee;
+  border: 1px solid #424750;
+  border-radius: 4px;
+  padding: 5px;
+}
+.curve-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  font-size: 10px;
+  margin: 6px 0;
+}
+.curve-options label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.enhanced-curve svg {
+  touch-action: none;
+  outline: none;
+}
+.enhanced-curve svg:focus {
+  box-shadow: 0 0 0 1px #beef72;
+}
+.tone-picking {
+  cursor: crosshair !important;
+}
+.tone-pick-hint {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  pointer-events: none;
+  background: #18202bee;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.properties:has(.enhanced-curve) .property-scroll {
+  flex-basis: 600px;
+  max-height: 78%;
+}
+.enhanced-curve svg {
+  max-height: 240px;
+}
+.tone-auto input,
+.tone-auto select {
+  background: var(--panel);
+  color: var(--text);
+}
+.tone-buttons button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}

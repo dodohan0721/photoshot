@@ -1,4 +1,4 @@
-# Photoshot · 02 레벨·히스토그램
+# Photoshot · 01 기본 도구, 레이어와 마스크
 
 브라우저에서 사진을 열고, 글자를 더하고, 레이어와 마스크로 편집하는 무료 웹 사진 편집기입니다.
 Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
@@ -7,16 +7,8 @@ Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
 
 ![Photoshot 01의 이미지, 문자, 레이어와 마스크 편집 화면](docs/images/editor-preview.png)
 
-> 기본 도구·레이어·마스크에 공개된 조정 레이어를 추가한 독립 실행 소스입니다. [COPYRIGHT.md](COPYRIGHT.md)의 기존 이용 조건을 유지하며, 오픈소스 라이선스를 부여하지 않았습니다.
-
-## 공개 회차
-
-| 버전 | 기능 및 사용법                                       |
-| ---- | ---------------------------------------------------- |
-| 01   | [기본 도구·레이어·마스크](docs/episode-01-readme.md) |
-| 02   | [레벨·히스토그램](docs/02-levels.md)                 |
-
-태그 `v0.2.0`은 공개된 회차별 누적 버전입니다. 이전 01 소스는 최초 커밋에 보존되어 있습니다.
+> 이 저장소는 **01 기본 도구 버전**의 소스 공개본입니다. 조정 레이어 16종과 AI 레이어 분리는 포함하지 않습니다.
+> 현재는 **코드 공개만 진행**하며, 오픈소스 라이선스는 부여하지 않았습니다. 이용 조건은 [COPYRIGHT.md](COPYRIGHT.md)를 확인하세요.
 
 ## 무엇을 할 수 있나요?
 
@@ -32,7 +24,7 @@ Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
 | 선택 영역     | 사각형 선택 영역으로 레이어 마스크 만들기                 |
 | 저장          | PNG·JPG 내보내기와 `.layerstudio` 프로젝트 저장·다시 열기 |
 
-개별 레이어의 기본 밝기·대비·채도 조절도 포함됩니다. 별도의 조정 레이어는 **조정 추가** 메뉴에서 사용합니다.
+개별 레이어의 기본 밝기·대비·채도 조절도 포함됩니다. 별도의 **조정 레이어** 기능과는 다릅니다.
 
 ## 내 컴퓨터에서 실행하기
 
@@ -70,19 +62,19 @@ npm run preview
 
 - 이미지 편집은 브라우저 안에서 처리합니다. 이 소스에는 이미지 업로드 서버나 분석 추적 코드가 없습니다.
 - 작업은 현재 브라우저의 IndexedDB에 자동 저장됩니다. 브라우저 데이터가 지워지면 사라질 수 있으므로 `.layerstudio` 파일도 저장하세요.
-- 독립 공개본은 `photoshot-adjustments` 저장 공간을 사용하므로 기존 서비스의 자동 저장 문서를 덮어쓰지 않습니다.
+- 독립 공개본은 `photoshot-01` 저장 공간을 사용하므로 기존 서비스의 자동 저장 문서를 덮어쓰지 않습니다.
 - RGB 8비트, 캔버스 한 변 최대 4096px, 최대 50개 레이어를 지원합니다. 이미지 입력은 파일당 최대 25MB입니다.
-- PSD·RAW·CMYK와 AI 레이어 분리는 포함하지 않습니다. 이 공개본에서 지원하지 않는 조정 레이어가 들어간 프로젝트는 열 수 없습니다.
-- 미리보기와 내보내기는 같은 Canvas 2D 합성기를 사용합니다. 데스크톱 브라우저를 권장합니다.
+- PSD·RAW·CMYK, 조정 레이어, AI 레이어 분리는 이 버전에 포함되지 않습니다. 다른 버전의 조정 레이어가 들어간 프로젝트는 열 수 없습니다.
+- 레이어 미리보기는 PixiJS/WebGL을 사용합니다. 하드웨어 가속을 사용할 수 있는 데스크톱 브라우저를 권장합니다.
 - 폰트·브라우저·혼합 모드에 따라 미리보기와 결과에 차이가 있을 수 있습니다. 저장된 PNG/JPG를 확인하세요.
-- 이 저장소는 기본 편집과 공개된 조정 기능을 독립 실행하도록 정리한 공개본이며, 전체 SLOHERO 홈페이지나 운영 서버 구성은 포함하지 않습니다.
+- 이 저장소는 사용법 01의 기본 기능을 독립 실행하도록 정리한 공개본이며, 전체 SLOHERO 홈페이지나 운영 서버 구성은 포함하지 않습니다.
 
 ## 코드 구성
 
 ```text
 src/editor.tsx     도구, 속성 패널, 레이어 목록, 실행 취소와 파일 처리
 src/document.ts   문서 형식, 레이어·마스크 합성, 저장과 불러오기
-src/stage.tsx      Canvas 2D 기반 편집 화면
+src/stage.tsx      PixiJS 기반 편집 화면
 src/styles.css    편집기 공통 스타일
 src/theme.css     밝은 테마
 ```
@@ -103,11 +95,11 @@ Photoshot은 Adobe Photoshop과 별개의 독립 프로젝트입니다.
 ## English
 
 **Photoshot** is a free browser-based photo editor with text, painting, cropping, layers and non-destructive layer masks.
-This repository publishes cumulative episode snapshots. It runs locally with React, TypeScript and Vite; no backend, API key or GPU worker is required.
+This repository publishes the **Episode 01** source snapshot. It runs locally with React, TypeScript, Vite and PixiJS; no backend, API key or GPU worker is required.
 
 **[Try Photoshot](https://slohero.com/photoshot/) · [Visual guide](https://slohero.com/photoshot/guides/basic-tools/)**
 
 Use Node.js 24, run `npm ci`, then `npm run dev`. `npm test` checks masks and compositing; `npm run build` type-checks and builds the static app.
-The published adjustment layers are included; AI layer separation and unreleased adjustments are excluded.
+Standalone adjustment layers and AI layer separation are not part of this version.
 
 **Public source, no open-source license granted.** See [COPYRIGHT.md](COPYRIGHT.md). Third-party dependencies retain their own licenses.

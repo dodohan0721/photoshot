@@ -1,3 +1,11 @@
+import { gaussianBlur } from './gaussian.ts';
+import {
+  adjustPixels,
+  compileAdjustment,
+  isIdentityAdjustment,
+  validateAdjustment,
+  type Adjustment,
+} from './adjustments.ts';
 export type Point = { x: number; y: number };
 export type Stroke = { points: Point[]; size: number; color: string; erase: boolean };
 export type LayerMask = {
@@ -6,12 +14,13 @@ export type LayerMask = {
   enabled: boolean;
   inverted: boolean;
   strokes: Stroke[];
+  raster?: { width: number; height: number; alpha: number[] };
   polygon?: Point[];
 };
 export type Layer = {
   id: string;
   name: string;
-  kind: 'image' | 'text' | 'paint';
+  kind: 'image' | 'text' | 'paint' | 'adjustment';
   src?: string;
   text: string;
   fontSize: number;
@@ -30,10 +39,12 @@ export type Layer = {
   saturation: number;
   strokes: Stroke[];
   mask?: LayerMask;
+  adjustment?: Adjustment;
+  gaussian?: { radius: number; enabled: boolean };
 };
 export type StudioDoc = {
   format: 'layer-studio';
-  version: 1;
+  version: 1 | 2;
   name: string;
   width: number;
   height: number;
@@ -94,7 +105,18 @@ export function maskSurface(mask: LayerMask, width = mask.width, height = mask.h
     ctx = c.getContext('2d')!;
   ctx.scale(c.width / mask.width, c.height / mask.height);
   ctx.fillStyle = '#fff';
-  if (mask.polygon) {
+  if (mask.raster) {
+    const r = mask.raster,
+      b = surface(r.width, r.height),
+      g = b.getContext('2d')!,
+      im = g.createImageData(r.width, r.height);
+    for (let i = 0; i < r.alpha.length; i++) {
+      im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = 255;
+      im.data[i * 4 + 3] = r.alpha[i];
+    }
+    g.putImageData(im, 0, 0);
+    ctx.drawImage(b, 0, 0, mask.width, mask.height);
+  } else if (mask.polygon) {
     ctx.beginPath();
     mask.polygon.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
     ctx.closePath();
@@ -161,6 +183,11 @@ export async function layerSurface(layer: Layer) {
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.drawImage(out, 0, 0);
   }
+  if (layer.gaussian?.enabled && layer.gaussian.radius > 0) {
+    const blurred = gaussianBlur(c, layer.gaussian.radius);
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.drawImage(blurred, 0, 0);
+  }
   if (layer.mask?.enabled) {
     ctx.globalCompositeOperation = 'destination-in';
     ctx.drawImage(maskSurface(layer.mask), 0, 0, c.width, c.height);
@@ -168,22 +195,150 @@ export async function layerSurface(layer: Layer) {
   }
   return c;
 }
-export async function composite(doc: StudioDoc, white = false) {
-  const c = surface(doc.width, doc.height),
+// Bounded source cache: adjustments reuse unchanged raster layers without retaining unbounded canvases.
+const rasterCache = new Map<Layer, HTMLCanvasElement>();
+let cachedPixels = 0;
+async function cachedSurface(layer: Layer) {
+  const cached = rasterCache.get(layer);
+  if (cached) return cached;
+  const image = await layerSurface(layer),
+    pixels = image.width * image.height;
+  while (rasterCache.size && (cachedPixels + pixels > 16_777_216 || rasterCache.size >= 8)) {
+    const key = rasterCache.keys().next().value!;
+    const old = rasterCache.get(key)!;
+    cachedPixels -= old.width * old.height;
+    rasterCache.delete(key);
+  }
+  if (pixels <= 16_777_216) {
+    rasterCache.set(layer, image);
+    cachedPixels += pixels;
+  }
+  return image;
+}
+export type RenderOptions = { maxEdge?: number; cancelled?: () => boolean };
+function checkRender(options: RenderOptions) {
+  if (options.cancelled?.()) throw new DOMException('Superseded render', 'AbortError');
+}
+function drawPositioned(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLCanvasElement,
+  layer: Layer,
+  sx: number,
+  sy: number,
+) {
+  ctx.save();
+  ctx.scale(sx, sy);
+  ctx.translate(layer.x + layer.width / 2, layer.y + layer.height / 2);
+  ctx.rotate((layer.rotation * Math.PI) / 180);
+  ctx.drawImage(image, -layer.width / 2, -layer.height / 2, layer.width, layer.height);
+  ctx.restore();
+}
+async function adjustCanvas(
+  canvas: HTMLCanvasElement,
+  layer: Layer,
+  sx: number,
+  sy: number,
+  options: RenderOptions,
+) {
+  if (!layer.visible || !layer.adjustment || layer.opacity === 0) return;
+  if (layer.blend === 'normal' && isIdentityAdjustment(layer.adjustment)) return;
+  if (
+    layer.mask?.enabled &&
+    layer.mask.inverted &&
+    !layer.mask.polygon &&
+    !layer.mask.raster &&
+    !layer.mask.strokes.length
+  )
+    return;
+  checkRender(options);
+  const ctx = canvas.getContext('2d')!,
+    pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let mask: Uint8ClampedArray | undefined;
+  const opaqueMask =
+    layer.mask &&
+    !layer.mask.inverted &&
+    !layer.mask.polygon &&
+    !layer.mask.raster &&
+    !layer.mask.strokes.length &&
+    layer.rotation === 0 &&
+    layer.x <= 0 &&
+    layer.y <= 0 &&
+    (layer.x + layer.width) * sx >= canvas.width &&
+    (layer.y + layer.height) * sy >= canvas.height;
+  if (layer.mask?.enabled && !opaqueMask) {
+    const m = surface(canvas.width, canvas.height);
+    drawPositioned(
+      m.getContext('2d')!,
+      maskSurface(layer.mask, Math.max(1, layer.width * sx), Math.max(1, layer.height * sy)),
+      layer,
+      sx,
+      sy,
+    );
+    mask = m.getContext('2d')!.getImageData(0, 0, m.width, m.height).data;
+  }
+  const compiled = compileAdjustment(layer.adjustment),
+    chunk = Math.max(canvas.width * 4, 262144);
+  for (let start = 0; start < pixels.data.length; start += chunk) {
+    checkRender(options);
+    adjustPixels(
+      pixels.data,
+      layer.adjustment,
+      layer.opacity,
+      mask,
+      layer.blend,
+      start,
+      Math.min(start + chunk, pixels.data.length),
+      compiled,
+    );
+    if (pixels.data.length > chunk) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  checkRender(options);
+  ctx.putImageData(pixels, 0, 0);
+}
+export async function composite(doc: StudioDoc, white = false, options: RenderOptions = {}) {
+  const ratio = options.maxEdge
+    ? Math.min(1, options.maxEdge / Math.max(doc.width, doc.height))
+    : 1;
+  const c = surface(doc.width * ratio, doc.height * ratio),
     ctx = c.getContext('2d')!;
+  const sx = c.width / doc.width,
+    sy = c.height / doc.height;
+  for (let index = 0; index < doc.layers.length; index++) {
+    checkRender(options);
+    const layer = doc.layers[index];
+    // Consecutive clipped adjustments belong to their immediate base, even when the base is hidden.
+    const clipped: Layer[] = [];
+    while (
+      doc.layers[index + 1]?.kind === 'adjustment' &&
+      doc.layers[index + 1].adjustment?.scope === 'clipped'
+    )
+      clipped.push(doc.layers[++index]);
+    if (!layer.visible || layer.opacity === 0) continue;
+    if (layer.kind === 'adjustment') {
+      if (layer.adjustment?.scope === 'clipped') continue; // No base below this orphaned clip.
+      await adjustCanvas(c, layer, sx, sy, options);
+      for (const adjustment of clipped) await adjustCanvas(c, adjustment, sx, sy, options);
+    } else {
+      const image = await cachedSurface(layer);
+      checkRender(options);
+      ctx.save();
+      ctx.globalAlpha = layer.opacity;
+      ctx.globalCompositeOperation = layer.blend === 'normal' ? 'source-over' : layer.blend;
+      if (clipped.length) {
+        const isolated = surface(c.width, c.height);
+        drawPositioned(isolated.getContext('2d')!, image, layer, sx, sy);
+        for (const adjustment of clipped) await adjustCanvas(isolated, adjustment, sx, sy, options);
+        ctx.drawImage(isolated, 0, 0);
+      } else drawPositioned(ctx, image, layer, sx, sy);
+      ctx.restore();
+    }
+  }
+  // JPEG paper is added AFTER adjustments, so transparent pixels never become tinted paper.
   if (white) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, c.width, c.height);
-  }
-  for (const layer of doc.layers) {
-    if (!layer.visible) continue;
-    const image = await layerSurface(layer);
-    ctx.save();
-    ctx.globalAlpha = layer.opacity;
-    ctx.globalCompositeOperation = layer.blend === 'normal' ? 'source-over' : layer.blend;
-    ctx.translate(layer.x + layer.width / 2, layer.y + layer.height / 2);
-    ctx.rotate((layer.rotation * Math.PI) / 180);
-    ctx.drawImage(image, -layer.width / 2, -layer.height / 2);
     ctx.restore();
   }
   return c;
@@ -219,7 +374,7 @@ export function validateDoc(value: unknown): StudioDoc {
   if (
     !d ||
     d.format !== 'layer-studio' ||
-    d.version !== 1 ||
+    ![1, 2].includes(d.version) ||
     typeof d.name !== 'string' ||
     !number(d.width, 1, 4096) ||
     !number(d.height, 1, 4096) ||
@@ -234,7 +389,7 @@ export function validateDoc(value: unknown): StudioDoc {
       typeof l.id !== 'string' ||
       ids.has(l.id) ||
       typeof l.name !== 'string' ||
-      !['image', 'text', 'paint'].includes(l.kind) ||
+      !['image', 'text', 'paint', 'adjustment'].includes(l.kind) ||
       typeof l.text !== 'string' ||
       l.text.length > 10000 ||
       typeof l.color !== 'string' ||
@@ -258,6 +413,31 @@ export function validateDoc(value: unknown): StudioDoc {
     )
       throw Error('프로젝트 레이어 데이터가 올바르지 않습니다.');
     ids.add(l.id);
+    if (
+      l.gaussian &&
+      (l.kind === 'adjustment' ||
+        !number(l.gaussian.radius, 0, 50) ||
+        typeof l.gaussian.enabled !== 'boolean')
+    )
+      throw Error('흐림 필터 데이터가 올바르지 않습니다.');
+    if (l.mask?.raster) {
+      const r = l.mask.raster;
+      if (
+        !Number.isInteger(r.width) ||
+        !Number.isInteger(r.height) ||
+        !number(r.width, 1, 1024) ||
+        !number(r.height, 1, 1024) ||
+        !Array.isArray(r.alpha) ||
+        r.alpha.length !== r.width * r.height ||
+        r.alpha.some((a) => !Number.isInteger(a) || !number(a, 0, 255))
+      )
+        throw Error('배경 제거 마스크 데이터가 올바르지 않습니다.');
+    }
+    if (l.kind === 'adjustment') {
+      if (d.version !== 2 || l.src || l.strokes.length)
+        throw Error('조정 레이어는 버전 2 프로젝트를 사용합니다.');
+      validateAdjustment(l.adjustment);
+    } else if (l.adjustment !== undefined) throw Error('일반 레이어에 조정 데이터가 있습니다.');
     if (l.mask) {
       const m = l.mask;
       if (
@@ -300,7 +480,7 @@ export async function localSave(doc: StudioDoc) {
 }
 function openDb() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const r = indexedDB.open('photoshot-01', 1);
+    const r = indexedDB.open('photoshot-adjustments', 1);
     r.onupgradeneeded = () => r.result.createObjectStore('documents');
     r.onsuccess = () => resolve(r.result);
     r.onerror = () => reject(r.error);

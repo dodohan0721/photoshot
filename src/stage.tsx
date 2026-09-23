@@ -1,77 +1,86 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import { Application, Sprite, Texture } from 'pixi.js';
-import 'pixi.js/advanced-blend-modes';
-import { layerSurface, type StudioDoc } from './document';
+import { composite, type StudioDoc } from './document';
+
+// Preview and export share the same compositor, including alpha, masks and clipped adjustments.
 export default function Stage({
   doc,
   onError,
+  clipping = false,
 }: {
   doc: StudioDoc;
   onError: (message: string) => void;
+  clipping?: boolean;
 }) {
-  const host = useRef<HTMLDivElement>(null),
-    app = useRef<Application | null>(null),
-    revision = useRef(0),
-    current = useRef(doc);
+  const host = useRef<HTMLCanvasElement>(null);
+  const revision = useRef(0),
+    current = useRef(doc),
+    rendering = useRef(false),
+    mounted = useRef(false);
   current.current = doc;
-  async function draw(a: Application, d: StudioDoc) {
-    const r = ++revision.current;
-    const entries = await Promise.all(
-      d.layers.filter((l) => l.visible).map(async (l) => ({ l, canvas: await layerSurface(l) })),
-    );
-    if (r !== revision.current || app.current !== a) return;
-    for (const old of a.stage.removeChildren()) old.destroy({ texture: true, textureSource: true });
-    a.renderer.resize(d.width, d.height);
-    for (const { l, canvas } of entries) {
-      const s = new Sprite(Texture.from(canvas));
-      s.anchor.set(0.5);
-      s.position.set(l.x + l.width / 2, l.y + l.height / 2);
-      s.rotation = (l.rotation * Math.PI) / 180;
-      s.alpha = l.opacity;
-      s.blendMode = l.blend;
-      a.stage.addChild(s);
+  const clippingRef = useRef(clipping);
+  clippingRef.current = clipping;
+  async function drain() {
+    if (rendering.current) return;
+    rendering.current = true;
+    try {
+      while (mounted.current) {
+        const r = revision.current,
+          d = current.current;
+        try {
+          const image = await composite(d, false, {
+            maxEdge: 1600,
+            cancelled: () => !mounted.current || r !== revision.current,
+          });
+          if (!mounted.current) break;
+          if (r === revision.current && host.current) {
+            if (clippingRef.current) {
+              const ctx = image.getContext('2d')!,
+                pixels = ctx.getImageData(0, 0, image.width, image.height),
+                p = pixels.data;
+              for (let i = 0; i < p.length; i += 4) {
+                if (!p[i + 3]) continue;
+                if (Math.max(p[i], p[i + 1], p[i + 2]) === 255) {
+                  p[i] = 255;
+                  p[i + 1] = 40;
+                  p[i + 2] = 40;
+                } else if (Math.min(p[i], p[i + 1], p[i + 2]) === 0) {
+                  p[i] = 30;
+                  p[i + 1] = 100;
+                  p[i + 2] = 255;
+                }
+              }
+              ctx.putImageData(pixels, 0, 0);
+            }
+            host.current.width = image.width;
+            host.current.height = image.height;
+            host.current.getContext('2d')!.drawImage(image, 0, 0);
+          }
+        } catch (e) {
+          if ((e as Error).name !== 'AbortError')
+            onError('이미지를 표시하지 못했습니다. 프로젝트를 저장한 뒤 다시 열어 주세요.');
+        }
+        if (r === revision.current) break;
+      }
+    } finally {
+      rendering.current = false;
     }
-    a.render();
   }
   useEffect(() => {
-    let disposed = false;
-    const a = new Application();
-    a.init({
-      width: current.current.width,
-      height: current.current.height,
-      backgroundAlpha: 0,
-      antialias: true,
-      preference: 'webgl',
-      autoStart: false,
-      resolution: 1,
-    })
-      .then(() => {
-        if (disposed) {
-          a.destroy(true, { children: true, texture: true, textureSource: true });
-          return;
-        }
-        app.current = a;
-        host.current?.appendChild(a.canvas);
-        return draw(a, current.current);
-      })
-      .catch(() =>
-        onError('그래픽 화면을 초기화하지 못했습니다. 브라우저의 하드웨어 가속을 확인해 주세요.'),
-      );
+    mounted.current = true;
     return () => {
-      disposed = true;
+      mounted.current = false;
       revision.current++;
-      if (app.current === a) {
-        app.current = null;
-        a.destroy(true, { children: true, texture: true, textureSource: true });
-      }
     };
   }, []);
   useEffect(() => {
-    if (app.current)
-      draw(app.current, doc).catch(() =>
-        onError('레이어를 표시하지 못했습니다. 이미지를 다시 열어 주세요.'),
-      );
-  }, [doc]);
-  return <div ref={host} className="pixi-stage" aria-label="이미지 미리보기" />;
+    revision.current++;
+    const frame = requestAnimationFrame(() => void drain());
+    return () => cancelAnimationFrame(frame);
+  }, [doc, clipping]);
+  return (
+    <div className="pixi-stage">
+      <canvas ref={host} aria-label="이미지 미리보기" />
+    </div>
+  );
 }
