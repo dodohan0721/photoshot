@@ -2,6 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Eye, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import LevelsEditor from './levels-editor';
+import CurvesEditor from './curves-editor';
+import ToneToolbar from './tone-toolbar';
+import type { TonePickRequest } from './tone-tools';
 import './tone-tools.css';
 import type { ToneAnalysis } from './tone-analysis';
 import {
@@ -13,6 +16,8 @@ import {
 } from './adjustments';
 
 type Props = {
+  picker: TonePickRequest | null;
+  onPick: (p: TonePickRequest | null) => void;
   value: Adjustment;
   disabled: boolean;
   onChange: (value: Adjustment) => void;
@@ -35,6 +40,8 @@ export default function AdjustmentPanel({
   analysisBusy,
   onCompare,
   comparing,
+  picker,
+  onPick,
 }: Props) {
   const [group, setGroup] = useState('rgb');
   const def = definitions[a.type];
@@ -109,6 +116,17 @@ export default function AdjustmentPanel({
             onEnd={onEnd}
           />
         )}
+        {a.type === 'curves' && (
+          <CurvesEditor
+            value={a}
+            channel={currentGroup as Channel}
+            analysis={analysis}
+            disabled={disabled}
+            onChange={onChange}
+            onBegin={onBegin}
+            onEnd={onEnd}
+          />
+        )}
         {(a.type === 'levels'
           ? []
           : def.controls.filter((c) => !c.group || c.group === currentGroup)
@@ -134,6 +152,19 @@ export default function AdjustmentPanel({
           ),
         )}
       </fieldset>
+      {['curves', 'exposure'].includes(a.type) && (
+        <ToneToolbar
+          value={a}
+          channel={currentGroup as Channel}
+          analysis={analysis}
+          busy={analysisBusy}
+          disabled={disabled}
+          picker={picker}
+          onPick={onPick}
+          onChange={onChange}
+          onError={onError}
+        />
+      )}
       <p className="adjustment-fine-help">숫자 입력 · 방향키 미세 조정 · Shift로 10배</p>
       <label className="adjustment-select">
         적용 대상

@@ -57,6 +57,7 @@ import {
   type StudioDoc,
 } from './document';
 import AdjustmentPanel from './adjustment-panel';
+import { sampleAdjustment, type TonePickRequest } from './tone-tools';
 import { analyzeTones, type ToneAnalysis } from './tone-analysis';
 import {
   adjustmentTypes,
@@ -114,6 +115,7 @@ export default function Editor() {
     [toneAnalysis, setToneAnalysis] = useState<ToneAnalysis | null>(null),
     [analysisBusy, setAnalysisBusy] = useState(false);
   const [toneClipping, setToneClipping] = useState(false);
+  const [tonePicker, setTonePicker] = useState<TonePickRequest | null>(null);
   const propertyScroll = useRef<HTMLDivElement>(null),
     analysisInput = useRef<StudioDoc | null>(null);
   const [selected, setSelected] = useState<string | null>(null),
@@ -220,6 +222,7 @@ export default function Editor() {
     };
   }, [analysisSource]);
   useEffect(() => {
+    setTonePicker(null);
     setToneClipping(false);
     setCompareId(null);
     propertyScroll.current?.scrollTo({ top: 0 });
@@ -503,6 +506,7 @@ export default function Editor() {
       }
       if (e.key === 'Escape') {
         setSelection(null);
+        setTonePicker(null);
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
@@ -682,7 +686,40 @@ export default function Editor() {
       y: ((e.clientY - b.top) * doc.height) / b.height,
     };
   }
+  async function pickTone(p: Point) {
+    if (!tonePicker || !active?.adjustment || !canEdit || !analysisSource) return;
+    const snapshot = docRef.current,
+      id = active.id,
+      a = active.adjustment,
+      request = tonePicker;
+    setTonePicker(null);
+    try {
+      const c = await composite(analysisSource, false);
+      if (docRef.current !== snapshot) return;
+      const x = Math.floor(p.x),
+        y = Math.floor(p.y);
+      if (x < 0 || y < 0 || x >= c.width || y >= c.height) return;
+      const pixel = Array.from(c.getContext('2d')!.getImageData(x, y, 1, 1).data);
+      if (!pixel[3]) {
+        notify('이미지가 있는 부분을 선택해 주세요.');
+        return;
+      }
+      changeAdjustment(id, sampleAdjustment(a, pixel, request));
+      notify(
+        request.mode === 'target'
+          ? '사진의 밝기에 맞는 제어점을 추가했습니다.'
+          : '선택한 위치로 보정했습니다.',
+      );
+    } catch (err) {
+      notify((err as Error).message);
+    }
+  }
   function pointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    if (tonePicker) {
+      e.preventDefault();
+      void pickTone(pos(e));
+      return;
+    }
     if (e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = pos(e),
@@ -1168,7 +1205,7 @@ export default function Editor() {
                   <svg
                     ref={overlay}
                     viewBox={`0 0 ${doc.width} ${doc.height}`}
-                    className={`canvas-overlay cursor-${tool}`}
+                    className={`canvas-overlay cursor-${tool} ${tonePicker ? 'tone-picking' : ''}`}
                     onPointerDown={pointerDown}
                     onPointerMove={pointerMove}
                     onPointerUp={pointerUp}
@@ -1343,6 +1380,8 @@ export default function Editor() {
                   클리핑 보기 · 파랑: 검정 / 빨강: 흰색
                 </label>
                 <AdjustmentPanel
+                  picker={tonePicker}
+                  onPick={setTonePicker}
                   key={active.id}
                   value={active.adjustment}
                   disabled={!canEdit}

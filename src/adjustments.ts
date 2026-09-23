@@ -1,6 +1,6 @@
 export type Channel = 'rgb' | 'r' | 'g' | 'b';
 export type CurvePoint = { x: number; y: number };
-export type AdjustmentType = 'levels';
+export type AdjustmentType = 'levels' | 'curves';
 export type Adjustment = {
   type: AdjustmentType;
   scope: 'below' | 'clipped';
@@ -41,6 +41,11 @@ export const definitions: Record<
       control(c + 'OutWhite', '출력 흰색', 0, 255, 255, 1, c),
     ]),
   },
+  curves: {
+    name: '곡선',
+    description: '선을 클릭해 점을 추가하고 드래그해 명암을 조절합니다.',
+    controls: [],
+  },
 };
 export const adjustmentTypes = Object.keys(definitions) as AdjustmentType[];
 export function makeAdjustment(type: AdjustmentType): Adjustment {
@@ -49,9 +54,20 @@ export function makeAdjustment(type: AdjustmentType): Adjustment {
     scope: 'below',
     values: Object.fromEntries(definitions[type].controls.map((c) => [c.key, c.initial])),
   };
+  if (type === 'curves')
+    a.curves = Object.fromEntries(
+      channels.map((c) => [
+        c,
+        [
+          { x: 0, y: 0 },
+          { x: 255, y: 255 },
+        ],
+      ]),
+    ) as Record<Channel, CurvePoint[]>;
   return a;
 }
 export function isIdentityAdjustment(a: Adjustment): boolean {
+  if (a.type === 'curves') return channels.every((c) => a.curves![c].every((p) => p.x === p.y));
   return definitions[a.type].controls.every((c) => a.values[c.key] === c.initial);
 }
 const clamp = (x: number, low = 0, high = 1) => Math.max(low, Math.min(high, x));
@@ -80,7 +96,59 @@ export function validateAdjustment(value: unknown): asserts value is Adjustment 
     throw Error('조정 수치가 허용 범위를 벗어났습니다.');
   if (a.type === 'levels' && channels.some((c) => a.values[c + 'Black'] >= a.values[c + 'White']))
     throw Error('레벨의 입력 검정은 입력 흰색보다 작아야 합니다.');
-  if (a.curves !== undefined) throw Error('지원하지 않는 곡선 데이터입니다.');
+  if (a.type === 'curves') {
+    if (
+      !a.curves ||
+      channels.some((c) => {
+        const p = a.curves?.[c];
+        return (
+          !Array.isArray(p) ||
+          p.length < 2 ||
+          p.length > 256 ||
+          p[0]?.x !== 0 ||
+          p.at(-1)?.x !== 255 ||
+          p.some(
+            (v, i) =>
+              !v || !finite(v.x, 0, 255) || !finite(v.y, 0, 255) || (i > 0 && v.x <= p[i - 1].x),
+          )
+        );
+      })
+    )
+      throw Error('곡선 점 데이터가 올바르지 않습니다.');
+  } else if (a.curves !== undefined) throw Error('이 조정에는 곡선 데이터가 필요하지 않습니다.');
+}
+// Shape-preserving cubic Hermite interpolation: avoids spline overshoot around sharp edits.
+export function curveTable(points: CurvePoint[]): Float64Array {
+  const n = points.length,
+    d = points.slice(1).map((p, i) => (p.y - points[i].y) / (p.x - points[i].x));
+  const m = points.map((_, i) =>
+    i === 0
+      ? d[0]
+      : i === n - 1
+        ? d[n - 2]
+        : d[i - 1] * d[i] <= 0
+          ? 0
+          : 2 / (1 / d[i - 1] + 1 / d[i]),
+  );
+  const out = new Float64Array(256);
+  let j = 0;
+  for (let x = 0; x < 256; x++) {
+    while (j < n - 2 && x > points[j + 1].x) j++;
+    const a = points[j],
+      b = points[j + 1],
+      h = b.x - a.x,
+      t = (x - a.x) / h;
+    out[x] =
+      clamp(
+        (2 * t ** 3 - 3 * t * t + 1) * a.y +
+          (t ** 3 - 2 * t * t + t) * h * m[j] +
+          (-2 * t ** 3 + 3 * t * t) * b.y +
+          (t ** 3 - t * t) * h * m[j + 1],
+        0,
+        255,
+      ) / 255;
+  }
+  return out;
 }
 type RGB = [number, number, number];
 const linear = (s: number) => (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4);
@@ -91,6 +159,13 @@ export function compileAdjustment(
   const v = a.values,
     t = a.type;
   if (true) {
+    const ct =
+      t === 'curves'
+        ? (Object.fromEntries(channels.map((c) => [c, curveTable(a.curves![c])])) as Record<
+            Channel,
+            Float64Array
+          >)
+        : null;
     const tables = ['r', 'g', 'b'].map((channel) =>
       Float64Array.from({ length: 256 }, (_, i) => {
         let x = i / 255;
@@ -102,6 +177,13 @@ export function compileAdjustment(
                   clamp((x * 255 - v[c + 'Black']) / (v[c + 'White'] - v[c + 'Black'])) **
                     (1 / v[c + 'Gamma'])) /
               255;
+        if (t === 'curves') {
+          x = ct![channel as Channel][i];
+          const f = clamp(x) * 255,
+            lo = Math.floor(f),
+            hi = Math.min(255, lo + 1);
+          x = ct!.rgb[lo] + (ct!.rgb[hi] - ct!.rgb[lo]) * (f - lo);
+        }
         return clamp(x);
       }),
     );

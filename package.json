@@ -1,10 +1,10 @@
 {
   "name": "photoshot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Photoshot 02: basic tools, layers, masks and levels.",
+  "description": "Photoshot 03: basic tools, layers, masks and levels, curves.",
   "homepage": "https://slohero.com/photoshot/",
   "repository": {
     "type": "git",
@@ -17,7 +17,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node tests/mask-render.mjs && node tests/levels-histogram.mjs && node tests/public-adjustments.mjs",
+    "test": "node tests/mask-render.mjs && node tests/levels-histogram.mjs && node tests/public-adjustments.mjs && node tests/tone-tools.mjs",
     "format": "prettier --write src tests index.html vite.config.ts postcss.config.mjs"
   },
   "dependencies": {
@@ -39,3 +39,4 @@
     "vite": "8.3.0"
   }
 }
+
