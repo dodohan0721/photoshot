@@ -54,12 +54,15 @@ export default function AdjustmentPanel({
       }
     onChange({ ...a, values });
   }
-  const groups = [
-    ['rgb', 'RGB'],
-    ['r', '빨강'],
-    ['g', '초록'],
-    ['b', '파랑'],
-  ];
+  const groups =
+    a.type === 'exposure'
+      ? []
+      : [
+          ['rgb', 'RGB'],
+          ['r', '빨강'],
+          ['g', '초록'],
+          ['b', '파랑'],
+        ];
   const currentGroup = group;
   return (
     <section className="adjustment-properties" aria-label={`${def.name} 조정 속성`}>

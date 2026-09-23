@@ -83,7 +83,30 @@ export default function ToneToolbar({
             {busy ? '분석 중…' : '자동'}
           </button>
         </div>
-      ) : null}
+      ) : (
+        <label className="adjustment-select">
+          사전 설정
+          <select
+            aria-label="노출 사전 설정"
+            defaultValue=""
+            onChange={(e) => {
+              if (e.target.value === '') return;
+              onChange({
+                ...value,
+                values: { ...makeAdjustment('exposure').values, ev: Number(e.target.value) },
+              });
+              e.target.value = '';
+            }}
+          >
+            <option value="">선택하세요</option>
+            <option value="0">기본값</option>
+            <option value="1">+1 스톱</option>
+            <option value="2">+2 스톱</option>
+            <option value="-1">−1 스톱</option>
+            <option value="-2">−2 스톱</option>
+          </select>
+        </label>
+      )}
       <div className="tone-buttons">
         {(['black', 'gray', 'white'] as const).map((mode, i) => (
           <button

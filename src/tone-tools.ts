@@ -51,9 +51,21 @@ export function sampleAdjustment(
     }
     return { ...a, curves };
   }
-  return a;
+  const y =
+    0.2126 * linear(rgb[0] / 255) + 0.7152 * linear(rgb[1] / 255) + 0.0722 * linear(rgb[2] / 255);
+  const values = { ...a.values };
+  if (mode === 'black') values.offset = clamp(-y * 2 ** values.ev, -0.5, 0.5);
+  else {
+    if (y < 1e-6) throw Error('완전한 검정 대신 밝기가 있는 부분을 선택해 주세요.');
+    const target = mode === 'white' ? 1 : linear(128 / 255);
+    const raw = (target ** values.gamma - values.offset) / y;
+    if (raw <= 0) throw Error('오프셋을 초기화한 뒤 다시 선택해 주세요.');
+    values.ev = clamp(Math.log2(raw), -20, 20);
+  }
+  values.ev = Math.round(values.ev * 100) / 100;
+  values.offset = Math.round(values.offset * 10000) / 10000;
+  return { ...a, values };
 }
-
 export function autoCurves(
   a: Adjustment,
   analysis: ToneAnalysis,

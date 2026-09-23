@@ -1,4 +1,4 @@
-# Photoshot · 03 곡선
+# Photoshot · 04 노출
 
 브라우저에서 사진을 열고, 글자를 더하고, 레이어와 마스크로 편집하는 무료 웹 사진 편집기입니다.
 Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
@@ -16,8 +16,9 @@ Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
 | 01   | [기본 도구·레이어·마스크](docs/episode-01-readme.md) |
 | 02   | [레벨·히스토그램](docs/02-levels.md)                 |
 | 03   | [곡선](docs/03-curves.md)                            |
+| 04   | [노출](docs/04-exposure.md)                          |
 
-태그 `v0.2.0`, `v0.3.0`은 공개된 회차별 누적 버전입니다. 이전 01 소스는 최초 커밋에 보존되어 있습니다.
+태그 `v0.2.0`, `v0.3.0`, `v0.4.0`은 공개된 회차별 누적 버전입니다. 이전 01 소스는 최초 커밋에 보존되어 있습니다.
 
 ## 무엇을 할 수 있나요?
 
@@ -112,3 +113,11 @@ Use Node.js 24, run `npm ci`, then `npm run dev`. `npm test` checks masks and co
 The published adjustment layers are included; AI layer separation and unreleased adjustments are excluded.
 
 **Public source, no open-source license granted.** See [COPYRIGHT.md](COPYRIGHT.md). Third-party dependencies retain their own licenses.
+
+## 공개본 검증
+
+2026-09-23 기준 각 회차의 타입 검사와 정적 빌드, 마스크·프로젝트 복원·알파 보존·조정 합성 검사를 통과했습니다. 브라우저에서 메뉴 범위, 히스토그램, 수치 변경, 실행 취소/다시 실행, PNG 내보내기, 곡선 스포이드와 설정 저장, 노출 프리셋을 확인했습니다.
+
+| 02 레벨 | 03 곡선 | 04 노출 |
+|---|---|---|
+| ![레벨](docs/images/02-levels.png) | ![곡선](docs/images/03-curves.png) | ![노출](docs/images/04-exposure.png) |

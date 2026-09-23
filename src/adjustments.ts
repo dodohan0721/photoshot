@@ -1,6 +1,6 @@
 export type Channel = 'rgb' | 'r' | 'g' | 'b';
 export type CurvePoint = { x: number; y: number };
-export type AdjustmentType = 'levels' | 'curves';
+export type AdjustmentType = 'levels' | 'curves' | 'exposure';
 export type Adjustment = {
   type: AdjustmentType;
   scope: 'below' | 'clipped';
@@ -45,6 +45,15 @@ export const definitions: Record<
     name: '곡선',
     description: '선을 클릭해 점을 추가하고 드래그해 명암을 조절합니다.',
     controls: [],
+  },
+  exposure: {
+    name: '노출',
+    description: '노출(EV), 오프셋과 감마를 조절합니다.',
+    controls: [
+      control('ev', '노출 (EV)', -20, 20, 0, 0.01),
+      control('offset', '오프셋', -0.5, 0.5, 0, 0.0001),
+      control('gamma', '감마', 0.01, 9.99, 1, 0.01),
+    ],
   },
 };
 export const adjustmentTypes = Object.keys(definitions) as AdjustmentType[];
@@ -184,6 +193,7 @@ export function compileAdjustment(
             hi = Math.min(255, lo + 1);
           x = ct!.rgb[lo] + (ct!.rgb[hi] - ct!.rgb[lo]) * (f - lo);
         }
+        if (t === 'exposure') x = srgb(clamp(linear(x) * 2 ** v.ev + v.offset) ** (1 / v.gamma));
         return clamp(x);
       }),
     );

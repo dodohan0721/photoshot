@@ -1,10 +1,10 @@
 {
   "name": "photoshot",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Photoshot 03: basic tools, layers, masks and levels, curves.",
+  "description": "Photoshot 04: basic tools, layers, masks and levels, curves, exposure.",
   "homepage": "https://slohero.com/photoshot/",
   "repository": {
     "type": "git",
@@ -39,4 +39,3 @@
     "vite": "8.3.0"
   }
 }
-
