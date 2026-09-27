@@ -38,6 +38,7 @@ for (const type of adjustmentTypes) {
       { x: 192, y: 210 },
       { x: 255, y: 255 },
     ];
+  if (type === 'vibrance') Object.assign(a.values, { vibrance: 60, saturation: 10 });
   if (type === 'exposure') Object.assign(a.values, { ev: 0.7, offset: -0.008, gamma: 1.05 });
   const plain = await composite({ ...doc, layers: [base] }, false),
     out = await composite(doc, false);

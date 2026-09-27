@@ -55,7 +55,7 @@ export default function AdjustmentPanel({
     onChange({ ...a, values });
   }
   const groups =
-    a.type === 'exposure'
+    a.type === 'exposure' || a.type === 'vibrance'
       ? []
       : [
           ['rgb', 'RGB'],

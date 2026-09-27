@@ -1,8 +1,10 @@
+import { applyVibranceResponse } from './vibrance-response.ts';
 export type Channel = 'rgb' | 'r' | 'g' | 'b';
 export type CurvePoint = { x: number; y: number };
-export type AdjustmentType = 'levels' | 'curves' | 'exposure';
+export type AdjustmentType = 'levels' | 'curves' | 'exposure' | 'vibrance';
 export type Adjustment = {
   type: AdjustmentType;
+  revision?: 2;
   scope: 'below' | 'clipped';
   values: Record<string, number>;
   curves?: Record<Channel, CurvePoint[]>;
@@ -55,6 +57,15 @@ export const definitions: Record<
       control('gamma', '감마', 0.01, 9.99, 1, 0.01),
     ],
   },
+  vibrance: {
+    name: '활기',
+    description: '채도가 낮은 색을 중심으로 생동감을 조절합니다.',
+    controls: [
+      control('vibrance', '활기', -100, 100),
+      control('saturation', '채도', -100, 100),
+      control('skin', '피부색 보호', 0, 1, 1),
+    ],
+  },
 };
 export const adjustmentTypes = Object.keys(definitions) as AdjustmentType[];
 export function makeAdjustment(type: AdjustmentType): Adjustment {
@@ -63,6 +74,7 @@ export function makeAdjustment(type: AdjustmentType): Adjustment {
     scope: 'below',
     values: Object.fromEntries(definitions[type].controls.map((c) => [c.key, c.initial])),
   };
+  if (type === 'vibrance') a.revision = 2;
   if (type === 'curves')
     a.curves = Object.fromEntries(
       channels.map((c) => [
@@ -76,6 +88,7 @@ export function makeAdjustment(type: AdjustmentType): Adjustment {
   return a;
 }
 export function isIdentityAdjustment(a: Adjustment): boolean {
+  if (a.type === 'vibrance') return a.values.vibrance === 0 && a.values.saturation === 0;
   if (a.type === 'curves') return channels.every((c) => a.curves![c].every((p) => p.x === p.y));
   return definitions[a.type].controls.every((c) => a.values[c.key] === c.initial);
 }
@@ -93,6 +106,7 @@ export function validateAdjustment(value: unknown): asserts value is Adjustment 
     Array.isArray(a.values)
   )
     throw Error('조정 레이어 종류가 올바르지 않습니다.');
+  if (a.revision !== undefined && a.revision !== 2) throw Error('지원하지 않는 조정 버전입니다.');
   const specs = definitions[a.type].controls;
   if (
     Object.keys(a.values).length !== specs.length ||
@@ -160,6 +174,29 @@ export function curveTable(points: CurvePoint[]): Float64Array {
   return out;
 }
 type RGB = [number, number, number];
+function hsl(r: number, g: number, b: number, out: RGB): RGB {
+  const hi = Math.max(r, g, b),
+    lo = Math.min(r, g, b),
+    d = hi - lo,
+    l = (hi + lo) / 2;
+  let h = 0;
+  if (d) h = hi === r ? ((g - b) / d + 6) % 6 : hi === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  out[0] = h / 6;
+  out[1] = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  out[2] = l;
+  return out;
+}
+function fromHsl(h: number, s: number, l: number, out: RGB) {
+  h = ((h % 1) + 1) % 1;
+  const c = (1 - Math.abs(2 * l - 1)) * s,
+    x = c * (1 - Math.abs(((h * 6) % 2) - 1)),
+    m = l - c / 2;
+  const k = Math.floor(h * 6);
+  out[0] = (k === 0 || k === 5 ? c : k === 1 || k === 4 ? x : 0) + m;
+  out[1] = (k === 1 || k === 2 ? c : k === 0 || k === 3 ? x : 0) + m;
+  out[2] = (k === 3 || k === 4 ? c : k === 2 || k === 5 ? x : 0) + m;
+}
+
 const linear = (s: number) => (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4);
 const srgb = (s: number) => (s <= 0.0031308 ? 12.92 * s : 1.055 * s ** (1 / 2.4) - 0.055);
 export function compileAdjustment(
@@ -167,7 +204,29 @@ export function compileAdjustment(
 ): (r: number, g: number, b: number, out: RGB) => void {
   const v = a.values,
     t = a.type;
-  if (true) {
+  if (t === 'vibrance') {
+    const scratch: RGB = [0, 0, 0];
+    return (R, G, B, out) => {
+      const r = R / 255,
+        g = G / 255,
+        b = B / 255;
+      if (a.revision === 2 && v.skin) {
+        scratch[0] = r;
+        scratch[1] = g;
+        scratch[2] = b;
+        applyVibranceResponse(scratch, v.vibrance, 0, out);
+        scratch[0] = out[0];
+        scratch[1] = out[1];
+        scratch[2] = out[2];
+        applyVibranceResponse(scratch, v.saturation, 1, out);
+      } else {
+        const [h, s, l] = hsl(r, g, b, scratch),
+          gain = (v.vibrance / 100) * (1 - s);
+        fromHsl(h, clamp(s * (1 + gain) * (1 + v.saturation / 100)), l, out);
+      }
+    };
+  }
+  if (t === 'levels' || t === 'curves' || t === 'exposure') {
     const ct =
       t === 'curves'
         ? (Object.fromEntries(channels.map((c) => [c, curveTable(a.curves![c])])) as Record<
