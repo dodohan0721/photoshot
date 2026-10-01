@@ -1,6 +1,12 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { curveTable, type CurvePoint, type Channel, type Adjustment } from './adjustments';
+import {
+  curveTable,
+  naturalCurveTable,
+  type CurvePoint,
+  type Channel,
+  type Adjustment,
+} from './adjustments';
 import type { ToneAnalysis } from './tone-analysis';
 type Props = {
   value: Adjustment;
@@ -34,7 +40,7 @@ export default function CurvesEditor({
     last = useRef<CurvePoint | null>(null),
     index = Math.min(selected, points.length - 1),
     point = points[index];
-  const table = curveTable(points),
+  const table = (value.revision === 2 ? naturalCurveTable : curveTable)(points),
     bins = analysis?.channelBins[channel] ?? [],
     max = Math.max(1, ...bins.map((n) => (log ? Math.log1p(n) : n)));
   const previous = useRef(points);
@@ -103,7 +109,7 @@ export default function CurvesEditor({
         <button
           type="button"
           onClick={() => {
-            const t = curveTable(points);
+            const t = (value.revision === 2 ? naturalCurveTable : curveTable)(points);
             change(
               Array.from(t, (y, x) => ({
                 x,
@@ -227,7 +233,9 @@ export default function CurvesEditor({
             .map((c) => (
               <polyline
                 key={c}
-                points={path(curveTable(value.curves![c]))}
+                points={path(
+                  (value.revision === 2 ? naturalCurveTable : curveTable)(value.curves![c]),
+                )}
                 fill="none"
                 stroke={colors[c]}
                 strokeWidth="1"

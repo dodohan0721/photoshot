@@ -61,3 +61,14 @@ assert.equal(original.curves.rgb.length, 2);
 console.log(
   'PASS: sampled black/gray/white points, targeted channel, auto percentiles, 256-point persistence, invalid presets, exposure luminance sampling and immutable edits',
 );
+
+const { autoBrightness } = await import('../src/tone-tools.ts');
+const { compileAdjustment } = await import('../src/adjustments.ts');
+const suggested = autoBrightness(
+  makeAdjustment('brightness'),
+  analyzeTones(new Uint8ClampedArray([75, 75, 75, 255])),
+);
+const corrected = [0, 0, 0];
+compileAdjustment(suggested)(75, 75, 75, corrected);
+assert(Math.abs(corrected[0] - 0.5) < 0.06);
+console.log('PASS new automatic brightness uses calibrated response');

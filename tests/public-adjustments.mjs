@@ -5,6 +5,7 @@ import {
   makeAdjustment,
   adjustPixels,
   validateAdjustment,
+  isIdentityAdjustment,
 } from '../src/adjustments.ts';
 globalThis.document = { createElement: () => createCanvas(1, 1) };
 const { makeLayer, composite, validateDoc } = await import('../src/document.ts');
@@ -13,7 +14,8 @@ for (const type of adjustmentTypes) {
     pixels = new Uint8ClampedArray([64, 128, 192, 128, 0, 255, 50, 0]);
   const before = pixels.slice();
   adjustPixels(pixels, a);
-  assert.deepEqual(pixels, before, `${type} identity and alpha`);
+  if (isIdentityAdjustment(a)) assert.deepEqual(pixels, before, `${type} identity`);
+  for (let i = 3; i < pixels.length; i += 4) assert.equal(pixels[i], before[i], `${type} alpha`);
   const base = makeLayer({
     width: 8,
     height: 8,
@@ -59,7 +61,7 @@ for (const type of adjustmentTypes) {
   await composite(doc, false);
   assert.throws(() => validateAdjustment({ ...a, values: { ...a.values, invalid: 1 } }));
 }
-assert.throws(() => validateAdjustment({ type: 'lookup', scope: 'below', values: {} }));
+assert.throws(() => validateAdjustment({ type: 'unknown', scope: 'below', values: {} }));
 const invalid = makeAdjustment('levels');
 invalid.values.rgbBlack = invalid.values.rgbWhite;
 assert.throws(() => validateAdjustment(invalid));

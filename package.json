@@ -1,10 +1,10 @@
 {
   "name": "photoshot",
-  "version": "0.5.0",
+  "version": "0.16.0",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Photoshot 05: basic tools, layers, masks, levels, curves, exposure and vibrance.",
+  "description": "Photoshot: independent browser photo editor with all 16 adjustment layers, masks and LUT/ICC import.",
   "homepage": "https://slohero.com/photoshot/",
   "repository": {
     "type": "git",
@@ -17,7 +17,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node tests/mask-render.mjs && node tests/levels-histogram.mjs && node tests/public-adjustments.mjs && node tests/tone-tools.mjs && node tests/vibrance.mjs",
+    "test": "node tests/mask-render.mjs && node tests/levels-histogram.mjs && node tests/public-adjustments.mjs && node tests/tone-tools.mjs && node tests/vibrance.mjs && node tests/adjustment-render.mjs && node tests/upgrade-render.mjs && node tests/icc-render.mjs && node tests/public-v05-compat.mjs",
     "format": "prettier --write src tests index.html vite.config.ts postcss.config.mjs"
   },
   "dependencies": {

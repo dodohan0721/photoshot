@@ -97,3 +97,60 @@
   color: var(--accent);
   border-color: var(--accent);
 }
+
+.advanced-adjustment {
+  border: 0;
+  margin: 12px 0;
+  padding: 0;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+.advanced-number {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.advanced-number input {
+  width: 85px;
+}
+.advanced-adjustment input[type='number'] {
+  padding: 5px;
+  border: 1px solid #b7c2ca;
+  border-radius: 4px;
+  max-width: 85px;
+}
+.gradient-stop {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-top: 1px solid #cbd2d8;
+  padding: 8px 0;
+}
+.gradient-stop label {
+  font-size: 11px;
+  display: grid;
+  gap: 4px;
+}
+.gradient-stop input[type='number'] {
+  width: 72px;
+}
+.gradient-stop input[type='color'] {
+  width: 46px;
+  height: 30px;
+}
+.hue-range {
+  height: 12px;
+  border-radius: 4px;
+}
+.advanced-adjustment button {
+  min-height: 30px;
+}
+.advanced-adjustment .adjustment-hint {
+  line-height: 1.6;
+}
+.advanced-adjustment select {
+  max-width: 100%;
+}

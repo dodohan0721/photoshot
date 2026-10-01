@@ -1,4 +1,5 @@
 'use client';
+import { blendNames } from './blend';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Stage from './stage';
 import {
@@ -181,7 +182,9 @@ export default function Editor() {
   let analysisSource: StudioDoc | null = null;
   if (
     active?.adjustment &&
-    ['brightness', 'levels', 'curves', 'exposure'].includes(active.adjustment.type)
+    ['brightness', 'levels', 'curves', 'exposure', 'hsl', 'blackwhite', 'threshold'].includes(
+      active.adjustment.type,
+    )
   ) {
     const index = doc.layers.findIndex((l) => l.id === active.id);
     let below = doc.layers.slice(0, index);
@@ -707,7 +710,9 @@ export default function Editor() {
       changeAdjustment(id, sampleAdjustment(a, pixel, request));
       notify(
         request.mode === 'target'
-          ? '사진의 밝기에 맞는 제어점을 추가했습니다.'
+          ? a.type === 'hsl'
+            ? '사진에서 선택한 색상 범위를 갱신했습니다.'
+            : '사진의 밝기에 맞는 제어점을 추가했습니다.'
           : '선택한 위치로 보정했습니다.',
       );
     } catch (err) {
@@ -1617,10 +1622,11 @@ export default function Editor() {
                     active && update(active.id, { blend: e.target.value as Layer['blend'] })
                   }
                 >
-                  <option value="normal">표준</option>
-                  <option value="multiply">곱하기</option>
-                  <option value="screen">스크린</option>
-                  <option value="overlay">오버레이</option>
+                  {Object.entries(blendNames).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
                 <label>
                   불투명도

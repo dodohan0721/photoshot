@@ -5,10 +5,10 @@ Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
 
 **[Photoshot 사용하기](https://slohero.com/photoshot/) · [편집기 바로 열기](https://slohero.com/photoshot/editor/) · [01 도구별 사용법과 작업기](https://slohero.com/photoshot/guides/basic-tools/)**
 
-![Photoshot 01의 이미지, 문자, 레이어와 마스크 편집 화면](docs/images/editor-preview.png)
+![Photoshot 01의 이미지, 문자, 레이어와 마스크 편집 화면](images/editor-preview.png)
 
 > 이 저장소는 **01 기본 도구 버전**의 소스 공개본입니다. 조정 레이어 16종과 AI 레이어 분리는 포함하지 않습니다.
-> 현재는 **코드 공개만 진행**하며, 오픈소스 라이선스는 부여하지 않았습니다. 이용 조건은 [COPYRIGHT.md](COPYRIGHT.md)를 확인하세요.
+> 현재는 **코드 공개만 진행**하며, 오픈소스 라이선스는 부여하지 않았습니다. 이용 조건은 [COPYRIGHT.md](../COPYRIGHT.md)를 확인하세요.
 
 ## 무엇을 할 수 있나요?
 
@@ -50,7 +50,7 @@ npm run preview
 
 ## 사용법
 
-[도구별 빠른 사용법](docs/basic-tools.md) · [사진으로 보는 전체 작업기 01](https://slohero.com/photoshot/guides/basic-tools/)
+[도구별 빠른 사용법](basic-tools.md) · [사진으로 보는 전체 작업기 01](https://slohero.com/photoshot/guides/basic-tools/)
 
 - `V`: 이동 / `M`: 사각형 선택 / `C`: 자르기
 - `B`: 브러시 / `E`: 지우개 / `T`: 문자 / `H`: 손 도구
@@ -84,7 +84,7 @@ src/theme.css     밝은 테마
 
 ## 권리 및 문의
 
-Photoshot 고유 소스에 오픈소스 라이선스를 부여하지 않았습니다. [권리 안내](COPYRIGHT.md)와 [외부 구성요소](THIRD_PARTY_NOTICES.md)를 참고하세요.
+Photoshot 고유 소스에 오픈소스 라이선스를 부여하지 않았습니다. [권리 안내](../COPYRIGHT.md)와 [외부 구성요소](../THIRD_PARTY_NOTICES.md)를 참고하세요.
 Photoshot은 Adobe Photoshop과 별개의 독립 프로젝트입니다.
 
 버그를 발견하면 GitHub Issues에 재현 과정과 브라우저 정보를 남겨주세요. 개인 사진이나 비밀 정보는 첨부하지 마세요.
@@ -102,4 +102,4 @@ This repository publishes the **Episode 01** source snapshot. It runs locally wi
 Use Node.js 24, run `npm ci`, then `npm run dev`. `npm test` checks masks and compositing; `npm run build` type-checks and builds the static app.
 Standalone adjustment layers and AI layer separation are not part of this version.
 
-**Public source, no open-source license granted.** See [COPYRIGHT.md](COPYRIGHT.md). Third-party dependencies retain their own licenses.
+**Public source, no open-source license granted.** See [COPYRIGHT.md](../COPYRIGHT.md). Third-party dependencies retain their own licenses.

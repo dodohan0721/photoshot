@@ -1,3 +1,4 @@
+import { blendNames, compositeBlend, type BlendMode } from './blend.ts';
 import { gaussianBlur } from './gaussian.ts';
 import {
   adjustPixels,
@@ -33,7 +34,7 @@ export type Layer = {
   opacity: number;
   visible: boolean;
   locked: boolean;
-  blend: 'normal' | 'multiply' | 'screen' | 'overlay';
+  blend: BlendMode;
   brightness: number;
   contrast: number;
   saturation: number;
@@ -321,9 +322,39 @@ export async function composite(doc: StudioDoc, white = false, options: RenderOp
     } else {
       const image = await cachedSurface(layer);
       checkRender(options);
+      const custom = ![
+        'normal',
+        'multiply',
+        'screen',
+        'overlay',
+        'darken',
+        'lighten',
+        'color-burn',
+        'color-dodge',
+        'soft-light',
+        'hard-light',
+        'difference',
+        'exclusion',
+        'hue',
+        'saturation',
+        'color',
+        'luminosity',
+      ].includes(layer.blend);
+      if (custom) {
+        const isolated = surface(c.width, c.height);
+        drawPositioned(isolated.getContext('2d')!, image, layer, sx, sy);
+        for (const adjustment of clipped) await adjustCanvas(isolated, adjustment, sx, sy, options);
+        const dst = ctx.getImageData(0, 0, c.width, c.height),
+          src = isolated.getContext('2d')!.getImageData(0, 0, c.width, c.height);
+        compositeBlend(dst.data, src.data, layer.opacity, layer.blend);
+        ctx.putImageData(dst, 0, 0);
+        continue;
+      }
       ctx.save();
       ctx.globalAlpha = layer.opacity;
-      ctx.globalCompositeOperation = layer.blend === 'normal' ? 'source-over' : layer.blend;
+      ctx.globalCompositeOperation = (
+        layer.blend === 'normal' ? 'source-over' : layer.blend
+      ) as GlobalCompositeOperation;
       if (clipped.length) {
         const isolated = surface(c.width, c.height);
         drawPositioned(isolated.getContext('2d')!, image, layer, sx, sy);
@@ -404,7 +435,7 @@ export function validateDoc(value: unknown): StudioDoc {
       !number(l.brightness, 0, 200) ||
       !number(l.contrast, 0, 200) ||
       !number(l.saturation, 0, 200) ||
-      !['normal', 'multiply', 'screen', 'overlay'].includes(l.blend) ||
+      !Object.hasOwn(blendNames, l.blend) ||
       typeof l.visible !== 'boolean' ||
       typeof l.locked !== 'boolean' ||
       (l.src && !/^data:image\/(png|jpeg|webp);base64,/.test(l.src)) ||

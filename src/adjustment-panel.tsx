@@ -4,15 +4,20 @@ import { Eye, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import LevelsEditor from './levels-editor';
 import CurvesEditor from './curves-editor';
 import ToneToolbar from './tone-toolbar';
-import type { TonePickRequest } from './tone-tools';
+import AdvancedAdjustment from './advanced-adjustment';
+import { autoBrightness, type TonePickRequest } from './tone-tools';
 import './tone-tools.css';
 import type { ToneAnalysis } from './tone-analysis';
 import {
   channels,
+  colorNames,
+  curveTable,
   definitions,
   makeAdjustment,
+  parseCube,
   type Adjustment,
   type Channel,
+  type CurvePoint,
 } from './adjustments';
 
 type Props = {
@@ -43,7 +48,16 @@ export default function AdjustmentPanel({
   picker,
   onPick,
 }: Props) {
-  const [group, setGroup] = useState('rgb');
+  const [group, setGroup] = useState(
+    a.type === 'balance'
+      ? 'midtones'
+      : a.type === 'selective'
+        ? '0'
+        : a.type === 'mixer'
+          ? 'r'
+          : 'rgb',
+  );
+  const file = useRef<HTMLInputElement>(null);
   const def = definitions[a.type];
   function change(key: string, n: number) {
     const values = { ...a.values, [key]: n };
@@ -55,15 +69,29 @@ export default function AdjustmentPanel({
     onChange({ ...a, values });
   }
   const groups =
-    a.type === 'exposure' || a.type === 'vibrance'
-      ? []
-      : [
+    a.type === 'levels' || a.type === 'curves'
+      ? [
           ['rgb', 'RGB'],
           ['r', '빨강'],
           ['g', '초록'],
           ['b', '파랑'],
-        ];
-  const currentGroup = group;
+        ]
+      : a.type === 'balance'
+        ? [
+            ['shadows', '어두운 영역'],
+            ['midtones', '중간톤'],
+            ['highlights', '밝은 영역'],
+          ]
+        : a.type === 'selective'
+          ? colorNames.map((n, i) => [String(i), n])
+          : a.type === 'mixer'
+            ? [
+                ['r', a.values.mono ? '회색' : '빨강 출력'],
+                ['g', '초록 출력'],
+                ['b', '파랑 출력'],
+              ]
+            : [];
+  const currentGroup = a.type === 'mixer' && a.values.mono ? 'r' : group;
   return (
     <section className="adjustment-properties" aria-label={`${def.name} 조정 속성`}>
       <div className="adjustment-title">
@@ -71,13 +99,65 @@ export default function AdjustmentPanel({
         <strong>{def.name}</strong>
         <span>조정 레이어</span>
       </div>
+      {a.type === 'brightness' && (
+        <>
+          <div className="adjustment-preset-row">
+            <label>
+              사전 설정
+              <select
+                aria-label="밝기 대비 사전 설정"
+                disabled={disabled}
+                value={
+                  brightnessPresets.find(
+                    (p) => p.brightness === a.values.brightness && p.contrast === a.values.contrast,
+                  )?.id ?? 'custom'
+                }
+                onChange={(e) => {
+                  const p = brightnessPresets.find((p) => p.id === e.target.value);
+                  if (p)
+                    onChange({ ...a, values: { brightness: p.brightness, contrast: p.contrast } });
+                }}
+              >
+                <option value="custom" disabled>
+                  사용자 정의
+                </option>
+                {brightnessPresets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="adjustment-auto"
+              disabled={disabled || analysisBusy || !analysis?.count}
+              title="아래 이미지의 밝기 분포로 보정값 제안"
+              onClick={() => analysis && onChange(autoBrightness(a, analysis))}
+            >
+              {analysisBusy ? '분석 중…' : '자동'}
+            </button>
+          </div>
+          <div className="tone-histogram" aria-label="조정 전 밝기 분포">
+            <svg
+              viewBox="0 0 256 48"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label="밝기 히스토그램"
+            >
+              <path d={analysis?.count ? histogramPath(analysis.bins) : ''} fill="currentColor" />
+            </svg>
+            <span>어두움</span>
+            <span>밝음</span>
+          </div>
+        </>
+      )}
       {groups.length > 0 && (
         <label className="adjustment-select">
-          채널
+          {a.type === 'balance' ? '명암 영역' : a.type === 'selective' ? '색상 계열' : '채널'}
           <select
             aria-label="조정 채널"
             value={currentGroup}
-            disabled={disabled}
+            disabled={disabled || (a.type === 'mixer' && !!a.values.mono)}
             onChange={(e) => {
               onEnd();
               setGroup(e.target.value);
@@ -132,14 +212,19 @@ export default function AdjustmentPanel({
         )}
         {(a.type === 'levels'
           ? []
-          : def.controls.filter((c) => !c.group || c.group === currentGroup)
+          : def.controls.filter(
+              (c) =>
+                (!c.group || c.group === currentGroup) &&
+                (!c.key.startsWith('colorize') || c.key === 'colorize' || a.values.colorize) &&
+                (!c.key.startsWith('tint') || c.key === 'tint' || a.values.tint),
+            )
         ).map((c) =>
           c.min === 0 && c.max === 1 ? (
             <label className="adjustment-check" key={c.key}>
               <input
                 type="checkbox"
                 aria-label={c.label}
-                checked={!!a.values[c.key]}
+                checked={!!(a.values[c.key] ?? c.initial)}
                 onChange={(e) => change(c.key, e.target.checked ? 1 : 0)}
               />
               {c.label}
@@ -147,15 +232,61 @@ export default function AdjustmentPanel({
           ) : (
             <AdjustmentControl
               key={c.key}
-              control={c}
-              value={a.values[c.key]}
+              control={
+                a.type === 'brightness' &&
+                c.key === 'contrast' &&
+                a.revision === 2 &&
+                !a.values.legacy
+                  ? { ...c, min: -50 }
+                  : a.type === 'brightness' && c.key === 'brightness' && a.values.legacy
+                    ? { ...c, min: -100, max: 100 }
+                    : c
+              }
+              value={a.values[c.key] ?? c.initial}
               onChange={(n) => change(c.key, n)}
               onBegin={onBegin}
             />
           ),
         )}
+        {a.colors && a.type !== 'gradient' && (
+          <div className="adjustment-colors">
+            {a.colors.map((color, i) => (
+              <label key={i}>
+                {a.type === 'photo' ? '필터 색' : i === 0 ? '어두운 색' : '밝은 색'}
+                <input
+                  type="color"
+                  aria-label={a.type === 'photo' ? '필터 색' : i === 0 ? '어두운 색' : '밝은 색'}
+                  value={color}
+                  onChange={(e) =>
+                    onChange({
+                      ...a,
+                      colors: a.colors!.map((old, j) => (j === i ? e.target.value : old)),
+                    })
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        )}
       </fieldset>
-      {['curves', 'exposure'].includes(a.type) && (
+      {a.type === 'photo' && (
+        <div className="adjustment-presets">
+          {[
+            ['따뜻하게', '#ec8a35'],
+            ['차갑게', '#348de8'],
+            ['세피아', '#aa7846'],
+          ].map(([name, color]) => (
+            <button
+              key={name}
+              disabled={disabled}
+              onClick={() => onChange({ ...a, colors: [color] })}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+      {['levels', 'curves', 'exposure'].includes(a.type) && (
         <ToneToolbar
           value={a}
           channel={currentGroup as Channel}
@@ -168,6 +299,15 @@ export default function AdjustmentPanel({
           onError={onError}
         />
       )}
+      <AdvancedAdjustment
+        value={a}
+        disabled={disabled}
+        onChange={onChange}
+        onError={onError}
+        analysis={analysis}
+        picker={picker}
+        onPick={onPick}
+      />
       <p className="adjustment-fine-help">숫자 입력 · 방향키 미세 조정 · Shift로 10배</p>
       <label className="adjustment-select">
         적용 대상

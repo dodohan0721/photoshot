@@ -1,7 +1,14 @@
 'use client';
 import { useRef, useState } from 'react';
 import { makeAdjustment, type Adjustment, type Channel } from './adjustments';
-import { autoCurves, parseTonePreset, type TonePickRequest } from './tone-tools';
+import {
+  autoCurves,
+  autoLevels,
+  parseAcv,
+  encodeAcv,
+  parseTonePreset,
+  type TonePickRequest,
+} from './tone-tools';
 import type { ToneAnalysis } from './tone-analysis';
 export default function ToneToolbar({
   value,
@@ -48,12 +55,12 @@ export default function ToneToolbar({
   };
   return (
     <fieldset className="tone-toolbar" disabled={disabled}>
-      {value.type === 'curves' ? (
+      {['curves', 'levels'].includes(value.type) ? (
         <div className="tone-auto">
           <label>
             자동 보정 방식
             <select
-              aria-label="곡선 자동 보정 방식"
+              aria-label="자동 보정 방식"
               value={autoMode}
               onChange={(e) => setAutoMode(e.target.value)}
             >
@@ -64,7 +71,7 @@ export default function ToneToolbar({
           <label>
             양끝 제외 %
             <input
-              aria-label="곡선 자동 제외 비율"
+              aria-label="자동 제외 비율"
               type="number"
               min="0"
               max="5"
@@ -77,7 +84,15 @@ export default function ToneToolbar({
             type="button"
             disabled={busy || !analysis?.count}
             onClick={() =>
-              analysis && onChange(autoCurves(value, analysis, autoMode === 'color', clip / 100))
+              analysis &&
+              onChange(
+                (value.type === 'levels' ? autoLevels : autoCurves)(
+                  value,
+                  analysis,
+                  autoMode === 'color',
+                  clip / 100,
+                ),
+              )
             }
           >
             {busy ? '분석 중…' : '자동'}
@@ -145,18 +160,35 @@ export default function ToneToolbar({
           설정 불러오기
         </button>
       </div>
+      {value.type === 'curves' && (
+        <button
+          type="button"
+          onClick={() => {
+            const url = URL.createObjectURL(new Blob([encodeAcv(value)]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'Photoshot_curves.acv';
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          }}
+        >
+          Photoshop ACV 저장
+        </button>
+      )}
       <input
         ref={input}
         hidden
         type="file"
-        accept=".json"
+        accept={value.type === 'curves' ? '.json,.acv' : '.json'}
         onChange={async (e) => {
           const f = e.target.files?.[0];
           e.target.value = '';
           if (!f) return;
           try {
             if (f.size > 100000) throw Error('사전 설정은 100KB 이하만 지원합니다.');
-            const a = parseTonePreset(await f.text(), value.type);
+            const a = f.name.toLowerCase().endsWith('.acv')
+              ? parseAcv(await f.arrayBuffer())
+              : parseTonePreset(await f.text(), value.type);
             onChange({ ...a, scope: value.scope });
           } catch (err) {
             onError((err as Error).message);

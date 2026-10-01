@@ -1,4 +1,4 @@
-# Photoshot · 05 활기
+# Photoshot · 조정 레이어 01~16
 
 브라우저에서 사진을 열고, 글자를 더하고, 레이어와 마스크로 편집하는 무료 웹 사진 편집기입니다.
 Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
@@ -11,6 +11,10 @@ Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
 
 ## 공개 회차
 
+**최신 v0.16.0 · 2026-10-01**: 06~16편을 추가하고 밝기/대비를 포함한 16종 조정 레이어를 모두 연결했습니다. 06~15의 별도 태그는 만들지 않았으며 아래 문서로 각 회차를 확인할 수 있습니다.
+
+01 영상은 밝기/대비를 소개합니다. GitHub의 최초 01 공개본은 기본 도구·레이어·마스크이며, 밝기/대비 전용 조정 레이어는 이번 누적본에 포함됩니다.
+
 | 버전 | 기능 및 사용법                                       |
 | ---- | ---------------------------------------------------- |
 | 01   | [기본 도구·레이어·마스크](docs/episode-01-readme.md) |
@@ -18,8 +22,19 @@ Photoshot을 만드는 과정을 코드와 사용 화면으로 공개합니다.
 | 03   | [곡선](docs/03-curves.md)                            |
 | 04   | [노출](docs/04-exposure.md)                          |
 | 05   | [활기·채도·피부색 보호](docs/05-vibrance.md)         |
+| 06   | [색조채도](docs/06-hue-saturation.md)                |
+| 07   | [색상균형](docs/07-color-balance.md)                 |
+| 08   | [흑백](docs/08-black-white.md)                       |
+| 09   | [포토필터](docs/09-photo-filter.md)                  |
+| 10   | [채널혼합](docs/10-channel-mixer.md)                 |
+| 11   | [컬러룩업](docs/11-color-lookup.md)                  |
+| 12   | [반전](docs/12-invert.md)                            |
+| 13   | [포스터화](docs/13-posterize.md)                     |
+| 14   | [임계값](docs/14-threshold.md)                       |
+| 15   | [그레이디언트맵](docs/15-gradient-map.md)            |
+| 16   | [선택색상](docs/16-selective-color.md)               |
 
-태그 `v0.2.0`, `v0.3.0`, `v0.4.0`, `v0.5.0`은 공개된 회차별 누적 버전입니다. 이전 01 소스는 최초 커밋에 보존되어 있습니다.
+태그 `v0.2.0`, `v0.3.0`, `v0.4.0`, `v0.5.0`, `v0.16.0`은 공개된 회차별 누적 버전입니다. 이전 01 소스는 최초 커밋에 보존되어 있습니다.
 
 ## 무엇을 할 수 있나요?
 
@@ -75,7 +90,7 @@ npm run preview
 - 작업은 현재 브라우저의 IndexedDB에 자동 저장됩니다. 브라우저 데이터가 지워지면 사라질 수 있으므로 `.layerstudio` 파일도 저장하세요.
 - 독립 공개본은 `photoshot-adjustments` 저장 공간을 사용하므로 기존 서비스의 자동 저장 문서를 덮어쓰지 않습니다.
 - RGB 8비트, 캔버스 한 변 최대 4096px, 최대 50개 레이어를 지원합니다. 이미지 입력은 파일당 최대 25MB입니다.
-- PSD·RAW·CMYK와 AI 레이어 분리는 포함하지 않습니다. 이 공개본에서 지원하지 않는 조정 레이어가 들어간 프로젝트는 열 수 없습니다.
+- PSD·RAW·CMYK와 AI 레이어 분리는 포함하지 않습니다. 16종 조정 레이어를 지원하며, 별도 기능인 Camera Raw와 전체 홈페이지 운영 구성은 포함하지 않습니다.
 - 미리보기와 내보내기는 같은 Canvas 2D 합성기를 사용합니다. 데스크톱 브라우저를 권장합니다.
 - 폰트·브라우저·혼합 모드에 따라 미리보기와 결과에 차이가 있을 수 있습니다. 저장된 PNG/JPG를 확인하세요.
 - 이 저장소는 기본 편집과 공개된 조정 기능을 독립 실행하도록 정리한 공개본이며, 전체 SLOHERO 홈페이지나 운영 서버 구성은 포함하지 않습니다.
@@ -111,7 +126,7 @@ This repository publishes cumulative episode snapshots. It runs locally with Rea
 **[Try Photoshot](https://slohero.com/photoshot/) · [Visual guide](https://slohero.com/photoshot/guides/basic-tools/)**
 
 Use Node.js 24, run `npm ci`, then `npm run dev`. `npm test` checks masks and compositing; `npm run build` type-checks and builds the static app.
-The published adjustment layers are included; AI layer separation and unreleased adjustments are excluded.
+All 16 adjustment layers are included. Episodes 06–16 were published together in v0.16.0; there are no separate v0.6.0–v0.15.0 tags. AI layer separation, Camera Raw and the production site backend are excluded.
 
 **Public source, no open-source license granted.** See [COPYRIGHT.md](COPYRIGHT.md). Third-party dependencies retain their own licenses.
 
@@ -130,3 +145,11 @@ The published adjustment layers are included; AI layer separation and unreleased
 [사진으로 보는 활기 사용법](https://slohero.com/photoshot/guides/vibrance/) · [05 기능 문서](docs/05-vibrance.md)
 
 피부색 보호 모드는 합성 RGB 샘플에서 측정한 응답을 보간합니다. Photoshop과 모든 이미지에서 동일한 결과를 보장하지 않으며, Adobe 프리셋이나 프로그램을 포함하지 않습니다. 기존 02~04 알고리즘과 이전 태그는 유지했습니다.
+
+## 06~16 누적 공개 · 2026-10-01
+
+16종 조정, 27개 혼합 모드, 색상 범위 선택, 자동 흑백, 다중 그레이디언트, LUT/ICC 읽기와 설정 저장을 포함합니다. 컬러룩업은 CUBE·3DL·LOOK·CSP와 제한된 ICC 유형을 지원합니다. [정확한 지원 범위](docs/11-color-lookup.md)를 확인하세요.
+
+새로 만드는 곡선·노출 등은 운영 편집기의 개선된 계산을 사용합니다. v0.5.0에서 저장한 조정 데이터의 기존 계산은 유지하며, 실제 픽셀 일치 회귀 검사에 포함했습니다. 기존 태그는 변경하지 않았습니다.
+
+테스트는 마스크·클리핑·투명도·저장 복원, 16종 조정, LUT 축 순서와 보간, 손상된 파일 거부, ICC 변환과 이전 공개 프로젝트 호환을 검사합니다. LittleCMS의 원본 라이선스는 [외부 구성요소 안내](THIRD_PARTY_NOTICES.md)에 연결했습니다.
